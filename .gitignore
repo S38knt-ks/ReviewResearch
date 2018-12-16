@@ -112,3 +112,21 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+# 以降、独自に定義
+
+# 辞書を無視
+/*.dic
+/*.trim
+/*.pn
+/*.txt
+
+# 生成したファイル群(csv, xlsx, html, json)を無視
+/**/*.html
+/**/*.json
+/**/*.csv
+/**/*.xlsx
+
+# ヒストグラムのpngを無視
+/result/**/*.png
