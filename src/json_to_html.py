@@ -20,7 +20,7 @@ def main(args):
     json_list = [
         os.path.abspath(f) 
         for f in glob.glob('{}\\**'.format(input_dir), recursive=True)
-        if f.endswith('.json')
+        if f.endswith('.json') and os.path.basename(f).startswith('review')
     ]
 
     normalize = args.normalize
@@ -29,7 +29,7 @@ def main(args):
     print(hc.__repr__())
     out_dir = args.out_dir
     for f in tqdm(json_list, ascii=True):
-        # print('\n[file] {}'.format(f))
+        tqdm.write('\n[file] {}'.format(f))
         html = hc.convert(f)
         # break
         # pprint(html)

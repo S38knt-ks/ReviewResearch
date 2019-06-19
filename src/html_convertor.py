@@ -30,11 +30,11 @@ class HtmlConvertor:
         self.doc_type = tag('!DOCTYPE html')
 
         # スタイルシートを埋め込む
-        css_file = 'C:\\Users\\ms338\\Desktop\\html_for_review\\src\\review_info_style.css'
+        css_file = r'src\review_info_style.css'
         style_content = self._read_script(css_file)
 
         # <script>コンテンツの用意
-        js_file = 'C:\\Users\\ms338\\Desktop\\html_for_review\\src\\review_info_tablesorter.js'
+        js_file = r'src\review_info_tablesorter.js'
         script_content = self._read_script(js_file)
 
 
@@ -89,10 +89,12 @@ class HtmlConvertor:
                     (BeautifulSoupによる整形済み)
         """
 
-        data = json.load(
-            open(json_file, mode='r', encoding=self.code),
-            object_pairs_hook=OrderedDict
-        )
+        with open(json_file, mode='r', encoding=self.code) as fp:
+            # print('type =', type(fp))
+            data = json.load(fp, object_pairs_hook=OrderedDict)
+
+        # data = json.load(open(json_file, mode='r', encoding=self.code),
+        #                  object_pairs_hook=OrderedDict)
 
         # <head>コンテンツの用意
         product_name = data[REVIEW_JSON_KEYS.product]
@@ -101,6 +103,7 @@ class HtmlConvertor:
         head = self._arrange_content(head_content_list, 'head')
 
         # <h*>コンテンツの用意
+        # category      = data[REVIEW_JSON_KEYS.category]
         link          = data[REVIEW_JSON_KEYS.link]
         maker         = data[REVIEW_JSON_KEYS.maker]
         average_stars = data[REVIEW_JSON_KEYS.average_stars]
@@ -297,18 +300,6 @@ class HtmlConvertor:
         # 行要素を作成
         tr = self._arrange_content(td_content_list, 'tr')
         return tr
-
-
-    def __repr__(self):
-        representation_list = [
-            '[code]\t\t{}'.format(self.code),
-            '[normalize]\t{}'.format(self.normalize_mode),
-            '[table design]\t{}'.format(self.table_design),
-            '[mark]\t\t{}'.format(self.mark)
-        ]
-        return '\n'.join(representation_list)
-
-
 
 
 def tag(name, *content, cls=None, **attrs):

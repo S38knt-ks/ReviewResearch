@@ -4,10 +4,11 @@ import glob
 import json
 import re
 import time
+import traceback
 
 import numpy as np
 
-from pprint import pprint
+from pprint import pprint, pformat
 from collections import namedtuple, OrderedDict
 from bs4 import BeautifulSoup
 from tqdm import tqdm
@@ -27,7 +28,7 @@ StarsDistribution = namedtuple('StarsDistribution', STARS_DISTRIBUTION)
 
 
 JSON_KEYS = [
-    'product', *LANDMARKS, 'real_reviews', 'stars_distribution', 'reviews'
+    'product', 'category', *LANDMARKS, 'real_reviews', 'stars_distribution', 'reviews'
 ]
 ReviewJsonKeys = namedtuple('ReviewJsonKeys', JSON_KEYS)
 REVIEW_JSON_KEYS = ReviewJsonKeys(*JSON_KEYS)
@@ -64,7 +65,7 @@ class ReviewInfoExtractor:
         self.review_div_fa = FindAttrs(
             'div',
             {
-                'class': 'a-section review',
+                # 'class': 'a-section review aok-relative',
                 'data-hook': 'review'
             }
         )
@@ -94,14 +95,14 @@ class ReviewInfoExtractor:
             FindAttrs(
                 'a',
                 {
-                    'class': 'a-size-base a-link-normal review-title a-color-base a-text-bold',
+                    # 'class': 'a-size-base a-link-normal review-title a-color-base a-text-bold',
                     'data-hook': 'review-title'
                 }
             ),
             FindAttrs(
                 'span',
                 {
-                    'class': 'a-size-base review-text',
+                    # 'class': 'a-size-base review-text',
                     'data-hook': 'review-body'
                 }
             )
@@ -118,6 +119,7 @@ class ReviewInfoExtractor:
         self._initialize_data()
 
         first_html = html_list[0]
+        self.category = self._decide_category(first_html)
         self.review_landmarks = self._extract_landmarks(first_html)
         self.all_info = [
             ri
@@ -138,7 +140,8 @@ class ReviewInfoExtractor:
                     商品名
         """
         data_dict = OrderedDict()
-        data_dict[REVIEW_JSON_KEYS.product] = product
+        data_dict[REVIEW_JSON_KEYS.product]  = product
+        data_dict[REVIEW_JSON_KEYS.category] = self.category
 
         data_dict[REVIEW_JSON_KEYS.link]          = self.review_landmarks.link
         data_dict[REVIEW_JSON_KEYS.maker]         = self.review_landmarks.maker
@@ -160,6 +163,7 @@ class ReviewInfoExtractor:
 
     
     def _initialize_data(self):
+        self.category         = None
         self.review_landmarks = None
         self.all_info         = None
 
@@ -167,6 +171,14 @@ class ReviewInfoExtractor:
         self.stars_distibution_dict = OrderedDict()
         for s in star_list:
             self.stars_distibution_dict[s] = 0
+
+
+    def _decide_category(self, html_path):
+        html_path = os.path.abspath(html_path)
+        product_dir, _  = os.path.split(html_path)
+        categoty_dir, _ = os.path.split(product_dir)
+        _, category     = os.path.split(categoty_dir)
+        return category
 
 
     def _extract_landmarks(self, html) -> ReviewLandmarks:
@@ -177,7 +189,7 @@ class ReviewInfoExtractor:
 
         link_fa, div_fa, maker_fa, ave_stars_fa, total_reviews_fa = self.landmarks_prop
 
-        link = bs.head.find(link_fa.name, link_fa.attrs)['href']
+        link = bs.find(link_fa.name, link_fa.attrs)['href']
 
         landmarks_div = bs.find(div_fa.name, div_fa.attrs)
 
@@ -191,7 +203,7 @@ class ReviewInfoExtractor:
 
         total_reviews = int(landmarks_div.find(
                 total_reviews_fa.name, total_reviews_fa.attrs
-            ).text.strip()
+            ).text.strip().replace(',', '')
         )
 
         return ReviewLandmarks(link, maker, ave_stars, total_reviews)
@@ -208,36 +220,50 @@ class ReviewInfoExtractor:
             self.review_div_fa.attrs
         )
 
+        # tqdm.write(pformat(review_div_list))
+
         return [self._get_review_info(rv) for rv in review_div_list]
 
 
     def _get_review_info(self, review_div) -> ReviewInfo:
         date_fa, star_fa, vote_fa, name_fa, title_fa, review_fa = self.review_info_prop
 
-        date = self._extract_date(
-            review_div.find(date_fa.name, date_fa.attrs)
-        )
+        date = ''
+        star = 0
+        vote = 0
+        name = ''
+        title = ''
+        review = ''
 
-        star = self._extract_stars(
-            review_div.find(star_fa.name, star_fa.attrs)
-        )
-        self.stars_distibution_dict[star] += 1
+        try:
+            date = self._extract_date(
+                review_div.find(date_fa.name, date_fa.attrs)
+            )
 
-        vote = self._extract_vote(
-            review_div.find(vote_fa.name, vote_fa.attrs)
-        )
+            star = self._extract_stars(
+                review_div.find(star_fa.name, star_fa.attrs)
+            )
+            self.stars_distibution_dict[star] += 1
 
-        name = review_div.find(
-            name_fa.name, name_fa.attrs
-        ).text.strip()
+            vote = self._extract_vote(
+                review_div.find(vote_fa.name, vote_fa.attrs)
+            )
 
-        title = review_div.find(
-            title_fa.name, title_fa.attrs
-        ).text.strip()
+            name = review_div.find(
+                name_fa.name, name_fa.attrs
+            ).text.strip()
 
-        review = review_div.find(
-            review_fa.name, review_fa.attrs
-        ).text.strip()
+            title = review_div.find(
+                title_fa.name, title_fa.attrs
+            ).text.strip()
+
+            review = review_div.find(
+                review_fa.name, review_fa.attrs
+            ).text.strip()
+
+        except AttributeError:
+            tqdm.write('<Attribute Error>')
+            tqdm.write('{}'.format(traceback.format_exc()))
 
         return ReviewInfo(date, star, vote, name, title, review)
 
@@ -275,7 +301,7 @@ def main(args):
     page_pat = re.compile(r'.*\\page_(\d+)\.html')
     review_html_list = sorted(
         [
-            review_html.replace('\\', '/') for review_html in glob.glob('{}/**'.format(input_dir), recursive=True)
+            os.path.abspath(review_html).replace('\\', '/') for review_html in glob.glob('{}/**'.format(input_dir), recursive=True)
             if page_pat.match(review_html)
         ]
     )
@@ -283,12 +309,8 @@ def main(args):
     product_dict = OrderedDict()
     for review_html in review_html_list:
         product_key = '/'.join(review_html.split('/')[:-1])
+        product_dict.setdefault(product_key, []).append(review_html)
 
-        if product_key in product_dict.keys():
-            product_dict[product_key].append(review_html)
-
-        else:
-            product_dict[product_key] = [review_html]
 
     print('[products]\t{}'.format(len(product_dict.keys())))
     print('[htmls]\t{}'.format(len(review_html_list)))
@@ -297,11 +319,17 @@ def main(args):
     print('extracting...')
     rie = ReviewInfoExtractor()        
     for product_key, review_html_list in tqdm(product_dict.items(), ascii=True):
+        tqdm.write('[product]\t{}'.format(product_key))
         
+        tqdm.write('htmls = {}'.format(len(review_html_list)))
+        tqdm.write(pformat(review_html_list))
+
         rie.extract_all_info(review_html_list)
 
         product = product_key.split('/')[-1]
-        out_file = '{}/review.json'.format(product_key)
+        out_file = os.path.join(product_key, 'review.json')
+        tqdm.write(out_file)
+        # out_file = '{}/review.json'.format(product_key)
         rie.save_json(out_file, product)
 
     print('done!')

@@ -122,6 +122,9 @@ dmypy.json
 /*.pn
 /*.txt
 
+# 仮想環境の無視
+vcabocha/*
+
 # 生成したファイル群(csv, xlsx, html, json)を無視
 /**/*.html
 /**/*.json
@@ -130,3 +133,14 @@ dmypy.json
 
 # ヒストグラムのpngを無視
 /result/**/*.png
+/validation/**/*.png
+
+# 研究に関するドキュメントの無視
+doc/*
+
+# 出力したファイルの無視
+2019_product/*
+2019_result/*
+eg_out/*
+product_html/*
+validation/*

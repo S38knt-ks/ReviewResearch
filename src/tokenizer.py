@@ -24,7 +24,7 @@ Word = namedtuple('Word', WORD_FIELDS)
 
 POS_LIST = [
     '名詞',
-    # '動詞',
+    '動詞',
     '形容詞',
     '形容動詞',
     # '副詞'
@@ -45,12 +45,11 @@ class Tokenizer:
     def __init__(self):
         self._tagger  = MeCab.Tagger('Ochasen')
         self._pat_obj = re.compile('\t|,')
-        self._correspond_words = OrderedDict()
         self.remover = StopwordRemover()
-        self._alignment_list = None
+        self._a_hiragana_pat = re.compile(r'[ぁ-ん]')
 
 
-    def get_baseforms(self, text: str, remove=True, pos_list=POS_LIST) -> list:
+    def get_baseforms(self, text: str, remove_stopwords=True, remove_a_hiragana=True, pos_list=POS_LIST) -> list:
         """
             形態素解析で得られた結果における原形(または表層)をリスト化して返す
             @param
@@ -69,11 +68,13 @@ class Tokenizer:
             for t in self._tokenize(text) if t.pos in pos_list
         ]
 
-        if remove:
-            return self.remover.remove(words)
+        if remove_stopwords:
+            words = self.remover.remove(words)
                 
-        else:
-            return words
+        if remove_a_hiragana:
+            words = [w for w in words if not (self._a_hiragana_pat.match(w.surface) and len(w.surface) == 1)]
+
+        return words
 
 
     def _tokenize(self, text: str):

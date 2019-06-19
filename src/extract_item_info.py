@@ -105,12 +105,15 @@ def main(args):
         'link'
     ]
 
-    in_dir = input_dir.replace('\\', '/').split('/')[-1]
-    out_dir = '{}/{}'.format(args.out_dir, in_dir)
+    category_name = os.path.basename(input_dir)
+    # in_dir = input_dir.replace('\\', '/').split('/')[-1]
+    out_dir = os.path.join(args.out_dir, category_name)
+    # out_dir = '{}/{}'.format(args.out_dir, in_dir)
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
-    out_file = '{}/{}_detail.csv'.format(out_dir, in_dir)
+    out_file = os.path.join(out_dir, '{}_detail.csv'.format(category_name))
+    # out_file = '{}/{}_detail.csv'.format(out_dir, in_dir)
 
     except_link = 'https://www.amazon.co.jp/gp/slredirect/picassoRedirect.html'
     item_line_list = [

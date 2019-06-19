@@ -62,7 +62,7 @@ def main(args):
     url = target_list[2]
 
     out_dir = args.out_dir
-    out_dir = '{}/{}'.format(out_dir, category)
+    out_dir = os.path.join(out_dir, category)
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
@@ -73,7 +73,8 @@ def main(args):
         html = urllib.request.urlopen(url).read()
         soup = BeautifulSoup(html, 'lxml')
 
-        out_file = '{}/page_{}.html'.format(out_dir, str(page).zfill(digit))
+        htmlfile = 'page_{}.html'.format(str(page).zfill(digit))
+        out_file = os.path.join(out_dir, htmlfile)
         with open(out_file, mode='w', encoding='utf-8') as fp:
             fp.write(soup.prettify())
 

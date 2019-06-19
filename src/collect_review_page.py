@@ -76,14 +76,17 @@ def main(args):
         page  = get_current_page(out_dir) + 1
         digit = len(str(last_page))
 
-        print()
-        print('[product]\t{}'.format(product)) 
+        if page > last_page:
+            continue
+
+        
+        tqdm.write('[product]\t{}'.format(product)) 
         interval = random.randint(7500, 12500) / 1000.0
         time.sleep(interval)
         
         bs = request_url(url, page)
         save_html(out_dir, page, digit, bs.prettify())
-        print('[page]\t{}\t[interval]\t{}'.format(
+        tqdm.write('[page]\t{}\t[interval]\t{}'.format(
                 '{0:{1}} / {2:{1}}'.format(page, digit, last_page),
                 interval
             )
@@ -95,7 +98,7 @@ def main(args):
                 time.sleep(interval)
                 bs = request_url(url, i)
                 save_html(out_dir, i, digit, bs.prettify())
-                print('[page]\t{}\t[interval]\t{}'.format(
+                tqdm.write('[page]\t{}\t[interval]\t{}'.format(
                         '{0:{1}} / {2:{1}}'.format(i, digit, last_page),
                         interval
                     )
