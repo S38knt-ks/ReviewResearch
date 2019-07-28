@@ -5,7 +5,6 @@ import re
 from collections import namedtuple
 from tokenizer import Tokenizer
 
-
 ALIGNMENT_FIELDS = ['surface', 'word', 'is_token']
 Alignment = namedtuple('Alignment', ALIGNMENT_FIELDS)
 
