@@ -19,7 +19,7 @@ import glob
 from tqdm import tqdm
 from pprint import pprint
 from collections import OrderedDict
-from extract_review_info import ReviewInfo
+from collector.extract_review_info import ReviewInfo
 
 
 EDGE = 'edge'

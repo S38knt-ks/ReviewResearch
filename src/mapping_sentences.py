@@ -2,7 +2,6 @@ import argparse
 import json
 import os
 import pandas
-
 import seaborn
 
 import numpy as np

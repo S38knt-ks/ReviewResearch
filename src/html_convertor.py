@@ -2,15 +2,16 @@ import os
 import json
 import pandas
 import re
+import pathlib
 
 from pprint import pprint
 from collections import OrderedDict
 from bs4 import BeautifulSoup
-from extract_review_info import STARS_DISTRIBUTION, REVIEW_JSON_KEYS, INFO_FIELDS
+
+from collector.extract_review_info import STARS_DISTRIBUTION, REVIEW_JSON_KEYS, INFO_FIELDS
 from normalize import normalize
 from tfidf import TFIDF
 # from tokenizer import Alignment
-
 
 
 class HtmlConvertor:
@@ -29,13 +30,14 @@ class HtmlConvertor:
         # html5の宣言
         self.doc_type = tag('!DOCTYPE html')
 
+        src_dir = pathlib.Path(__file__).resolve().parent
         # スタイルシートを埋め込む
-        css_file = r'src\review_info_style.css'
-        style_content = self._read_script(css_file)
+        css_file = src_dir / 'css' / 'review_info_style.css'
+        style_content = self._read_script(str(css_file))
 
         # <script>コンテンツの用意
-        js_file = r'src\review_info_tablesorter.js'
-        script_content = self._read_script(js_file)
+        js_file = src_dir / 'js' / 'review_info_tablesorter.js'
+        script_content = self._read_script(str(js_file))
 
 
         # jsonファイルに依存しない<head>コンテンツの用意

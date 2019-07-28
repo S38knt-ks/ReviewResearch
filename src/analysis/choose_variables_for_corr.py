@@ -20,6 +20,7 @@ GUIで相関を見たいレビュー文書内の変数を選択できるよう�
 import os
 import glob
 import pathlib
+import sys
 
 from kivy.app import App
 from kivy.properties import ObjectProperty, StringProperty

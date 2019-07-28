@@ -2,6 +2,7 @@ import os
 import json
 import argparse
 import glob
+import pathlib
 
 from collections import OrderedDict, namedtuple
 from bs4 import BeautifulSoup
@@ -237,10 +238,11 @@ if __name__ == "__main__":
     
     dic_dir = args.dic_dir
 
-    js_file  = r'src\heatmap.js'
-    css_file = r'src\heatmap.css'
+    src_dir = pathlib.Path(__file__).resolve().parent
+    js_file  = src_dir / 'js' / 'heatmap.js'
+    css_file = src_dir / 'css' / 'heatmap.css'
 
-    creator = AttrMapHtmlCreator(dic_dir, category, js_file, css_file)
+    creator = AttrMapHtmlCreator(dic_dir, category, str(js_file), str(css_file))
 
     json_list = [f for f in glob.glob('{}\\**'.format(input_dir), recursive=True) if os.path.isfile(f) and f.endswith('.json')]
     map_json_list = [j for j in json_list if os.path.basename(j).startswith('map_')]
