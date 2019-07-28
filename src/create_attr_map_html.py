@@ -10,7 +10,7 @@ from pprint import pprint
 
 from mapping_sentences import SentenceMapper
 from html_convertor import tag
-from normalize import normalize
+from nlp.normalize import normalize
 
 
 def arrange_content(content_list, tag_name, **attrs):
