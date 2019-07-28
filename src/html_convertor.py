@@ -9,8 +9,8 @@ from collections import OrderedDict
 from bs4 import BeautifulSoup
 
 from collector.extract_review_info import STARS_DISTRIBUTION, REVIEW_JSON_KEYS, INFO_FIELDS
-from normalize import normalize
-from tfidf import TFIDF
+from nlp.normalize import normalize
+from nlp.tfidf import TFIDF
 # from tokenizer import Alignment
 
 

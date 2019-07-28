@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from collections import OrderedDict, namedtuple, defaultdict
 from pprint import pprint
 
-from extract_attribution import AttributionExtractor
+from nlp.extract_attribution import AttributionExtractor
 
 class SentenceMapper:
 

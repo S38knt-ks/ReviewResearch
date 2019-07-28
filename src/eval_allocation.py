@@ -7,7 +7,7 @@ import numpy as np
 from collections import OrderedDict, namedtuple
 from pprint import pprint
 
-from extract_attribution import AttributionExtractor
+from nlp.extract_attribution import AttributionExtractor
 
 
 class Evaluater:

@@ -6,8 +6,8 @@ import glob
 from tqdm import tqdm
 from collections import OrderedDict, namedtuple
 
-from alloc_attribute import AttributeAllocation
-from split_sentence import Splitter
+from nlp.alloc_attribute import AttributeAllocation
+from nlp.split_sentence import Splitter
 
 PRODUCT_NAME = 'product'
 SENTENCES    = 'sentences'
