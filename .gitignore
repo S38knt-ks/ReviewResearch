@@ -145,3 +145,6 @@ eg_out/*
 product_html/*
 validation/*
 devset/*
+
+# GUI用のフォントの無視
+Fonts/*

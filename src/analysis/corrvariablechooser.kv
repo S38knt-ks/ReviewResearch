@@ -1,0 +1,50 @@
+#:kivy 1.11.1
+
+<Root>:
+    BoxLayout:
+        
+        BoxLayout:
+            orientation: 'vertical'
+
+            Button:
+                text: "Select Dir"
+                on_press: root.select_dir()
+
+            Label:
+                text: root.data_dir
+
+        ScrollView:
+            do_scroll_x: True
+            do_scroll_y: True
+
+            Label:
+                id: review_json_list
+                size_hint_y: None
+                height: self.texture_size[1]
+                padding: 10, 10
+                text: "None"
+
+
+<DirectorySelectDialog>:
+    BoxLayout:
+        orientation: "vertical"
+        size: root.size
+        pos: root.pos
+
+        FileChooserListView:
+            id: filechooser
+            dirselect: True
+            path: './'
+
+        BoxLayout:
+            height: 30
+
+            Button:
+                text: "Cancel"
+                on_release: root.cancel()
+
+            Button:
+                text: "Select"
+                on_release: root.select(filechooser.selection)
+
+            
