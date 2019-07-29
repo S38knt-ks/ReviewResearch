@@ -8,53 +8,47 @@ from pprint import pprint
 from tokenizer import TOKEN_LIST
 from normalize import normalize
 
+CHUNK_PROP_FIELD = ['phrase',
+                    'score',
+                    'link',
+                    'size',
+                    'pos',
+                    'head',
+                    'func',
+                    'features']
+
+ChunkProp = namedtuple('ChunkProp', CHUNK_PROP_FIELD)
+
+TOKEN_FEATURE_FIELD = TOKEN_LIST[1:]
+TokenFeature = namedtuple('TokenFeature', TOKEN_FEATURE_FIELD)
+
+TOKEN_PROP_FIELD = ['surface',
+                    'normalized',
+                    'features',
+                    'ne',
+                    'info',
+                    'chunk']
+
+TokenProp = namedtuple('TokenProp', TOKEN_PROP_FIELD)
+
+CONTENT_WORD_FIELD = ['id', 'phrase', 'word']
+ContentWord = namedtuple('ContentWord', CONTENT_WORD_FIELD)
+
+PHRASE_CONTENT_FIELD = ['main', 'words', 'pos', 'sub']
+PhraseContent = namedtuple('PhraseContent', PHRASE_CONTENT_FIELD)
+
+ANALYSIS_RESULT_FIELD = ['chunk_dict', 'token_dict', 'tree']
+AnalysisResult = namedtuple('AnalysisResult', ANALYSIS_RESULT_FIELD)
+
+LINK_PROP_FIELD = ['chunk_id', 'phrase_content']
+LinkProp = namedtuple('LinkProp', LINK_PROP_FIELD)
+
+REQUIREMENT_POS_LIST = ['名詞', '形容詞', '動詞', '副詞']
+
 class DependencyAnalyzer:
-
-    CHUNK_PROP_FIELD = [
-        'phrase',
-        'score',
-        'link',
-        'size',
-        'pos',
-        'head',
-        'func',
-        'features'
-    ]
-
-    ChunkProp = namedtuple('ChunkProp', CHUNK_PROP_FIELD)
-
-    TOKEN_FEATURE_FIELD = TOKEN_LIST[1:]
-
-    TokenFeature = namedtuple('TokenFeature', TOKEN_FEATURE_FIELD)
-
-    TOKEN_PROP_FIELD = [
-        'surface',
-        'normalized',
-        'features',
-        'ne',
-        'info',
-        'chunk'
-    ]
-
-    TokenProp = namedtuple('TokenProp', TOKEN_PROP_FIELD)
-
-    CONTENT_WORD_FIELD = ['id', 'phrase', 'word']
-
-    ContentWord = namedtuple('ContentWord', CONTENT_WORD_FIELD)
-
-    PHRASE_CONTENT_FIELD = ['main', 'words', 'pos', 'sub']
-
-    PhraseContent = namedtuple('PhraseContent', PHRASE_CONTENT_FIELD)
-
-    ANALYSIS_RESULT_FIELD = ['chunk_dict', 'token_dict', 'tree']
-
-    AnalysisResult = namedtuple('AnalysisResult', ANALYSIS_RESULT_FIELD)
-
-    LINK_PROP_FIELD = ['chunk_id', 'phrase_content']
-    LinkProp = namedtuple('LinkProp', LINK_PROP_FIELD)
-
-    REQUIREMENT_POS_LIST = ['名詞', '形容詞', '動詞', '副詞']
-
+    """
+    係り受け解析器
+    """
 
     def __init__(self):
         self._result_tree = None
@@ -70,7 +64,7 @@ class DependencyAnalyzer:
 
     def analyze(self, sentence: str) -> AnalysisResult:
         chunk_dict, token_dict = self._parse(sentence)
-        return self.AnalysisResult(chunk_dict, token_dict, self._result_tree)
+        return AnalysisResult(chunk_dict, token_dict, self._result_tree)
 
 
 
@@ -146,14 +140,14 @@ class DependencyAnalyzer:
 
             words = [
                 token.normalized for token in tokens.values()
-                if token.features.pos in self.REQUIREMENT_POS_LIST and not self._a_hiragana_pat.match(token.surface) 
+                if token.features.pos in REQUIREMENT_POS_LIST and not self._a_hiragana_pat.match(token.surface) 
             ]
 
             if lf == rl and lf == rh:
                 lf = ''
 
             if rl == rh:
-                representation_dict[chunk_id] = self.PhraseContent(tokens[ri].surface, words, pos, lf)
+                representation_dict[chunk_id] = PhraseContent(tokens[ri].surface, words, pos, lf)
                 continue
 
             
@@ -166,7 +160,7 @@ class DependencyAnalyzer:
 
 
             term = ''.join(t.surface for t in terms)    
-            representation_dict[chunk_id] = self.PhraseContent(term, words, pos, lf)
+            representation_dict[chunk_id] = PhraseContent(term, words, pos, lf)
 
         return representation_dict
 
@@ -198,7 +192,7 @@ class DependencyAnalyzer:
                     visited.append(link)
 
                 # print('\t{}\t{}'.format(link, representation_dict[link]))
-                link_prop_list.append(self.LinkProp(link, representation_dict[link]))
+                link_prop_list.append(LinkProp(link, representation_dict[link]))
 
             link_dict[chunk_id] = link_prop_list
 
@@ -231,30 +225,27 @@ class DependencyAnalyzer:
 
     
     def _make_phrase(self, tree, chunk: CaboCha.Chunk) -> str:
-        phrase = ''.join(
-            str(tree.token(i).surface) for i in range(chunk.token_pos, chunk.token_pos + chunk.token_size)
-        )
+        phrase = ''.join(str(tree.token(i).surface) 
+                         for i in range(chunk.token_pos, chunk.token_pos + chunk.token_size))
         return phrase
     
 
     def _allocate_chunk_fields(self, chunk: CaboCha.Chunk, phrase: str) -> ChunkProp:
-        return self.ChunkProp(
-            phrase,
-            chunk.score,
-            chunk.link,
-            chunk.token_size,
-            chunk.token_pos,
-            chunk.head_pos,
-            chunk.func_pos,
-            [str(chunk.feature_list(i)) for i in range(chunk.feature_list_size)]
-        )
+        return ChunkProp(phrase,
+                         chunk.score,
+                         chunk.link,
+                         chunk.token_size,
+                         chunk.token_pos,
+                         chunk.head_pos,
+                         chunk.func_pos,
+                         [str(chunk.feature_list(i)) for i in range(chunk.feature_list_size)])
 
 
     def _allocate_token_fields(self, token: CaboCha.Token) -> TokenProp:
         feature = token.feature
         features = feature.split(',')
         total_feature = len(features)
-        total_token_feature = len(self.TOKEN_FEATURE_FIELD)
+        total_token_feature = len(TOKEN_FEATURE_FIELD)
         if total_feature != total_token_feature:
             if total_feature > total_token_feature:
                 features = features[0:total_token_feature]
@@ -264,29 +255,25 @@ class DependencyAnalyzer:
                 additional_feature = ['*' for i in range(diff)]
                 features.extend(additional_feature)
 
-        token_feature = self.TokenFeature(*features)
+        token_feature = TokenFeature(*features)
         if token_feature.base_form == '*':
-            token_feature = self.TokenFeature(
-                token_feature.pos,
-                token_feature.pos_detail1,
-                token_feature.pos_detail2,
-                token_feature.pos_detail3,
-                token_feature.infl_type,
-                token_feature.infl_form,
-                token.surface,
-                token_feature.reading,
-                token_feature.phonetic
-            )
+            token_feature = TokenFeature(token_feature.pos,
+                                         token_feature.pos_detail1,
+                                         token_feature.pos_detail2,
+                                         token_feature.pos_detail3,
+                                         token_feature.infl_type,
+                                         token_feature.infl_form,
+                                         token.surface,
+                                         token_feature.reading,
+                                         token_feature.phonetic)
 
 
-        return self.TokenProp(
-            token.surface,
-            token.normalized_surface,
-            token_feature,
-            token.ne,
-            token.additional_info,
-            token.chunk
-        )
+        return TokenProp(token.surface,
+                         token.normalized_surface,
+                         token_feature,
+                         token.ne,
+                         token.additional_info,
+                         token.chunk)
 
 
 if __name__ == "__main__":

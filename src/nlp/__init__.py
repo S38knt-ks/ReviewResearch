@@ -6,3 +6,4 @@ from . import normalize
 from . import remove_stopwords
 from . import split_sentence
 from . import tokenizer
+from . import attr_dictionary
