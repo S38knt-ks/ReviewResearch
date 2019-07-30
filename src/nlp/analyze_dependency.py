@@ -4,37 +4,41 @@ import re
 
 from collections import OrderedDict, namedtuple
 from pprint import pprint
+from functools import partial
 
 from tokenizer import TOKEN_LIST
 from normalize import normalize
 
-CHUNK_PROP_FIELD = ['phrase',
-                    'score',
-                    'link',
-                    'size',
-                    'pos',
-                    'head',
-                    'func',
-                    'features']
+CHUNK_PROP_FIELD = ['phrase',   # 節
+                    'score',    # 接続先との結合度
+                    'link',     # 接続先の番号
+                    'size',     # 形態素の数
+                    'pos',      # 節の先頭の形態素の文頭からの位置
+                    'head',     # 主辞の位置
+                    'func',     # 機能語の位置
+                    'features'] # 節内の形態素の詳細
 
 ChunkProp = namedtuple('ChunkProp', CHUNK_PROP_FIELD)
 
 TOKEN_FEATURE_FIELD = TOKEN_LIST[1:]
 TokenFeature = namedtuple('TokenFeature', TOKEN_FEATURE_FIELD)
 
-TOKEN_PROP_FIELD = ['surface',
-                    'normalized',
-                    'features',
-                    'ne',
-                    'info',
-                    'chunk']
+TOKEN_PROP_FIELD = ['surface',    # 形態素の表層（表示されている文字）
+                    'normalized', # 正規化後の形
+                    'features',   # 形態素の詳細
+                    'ne',         # 固有表現
+                    'info',       # ？
+                    'chunk']      # 複合語内の単語
 
 TokenProp = namedtuple('TokenProp', TOKEN_PROP_FIELD)
 
 CONTENT_WORD_FIELD = ['id', 'phrase', 'word']
 ContentWord = namedtuple('ContentWord', CONTENT_WORD_FIELD)
 
-PHRASE_CONTENT_FIELD = ['main', 'words', 'pos', 'sub']
+PHRASE_CONTENT_FIELD = ['main',  # 主辞
+                        'words', # 主辞内の名詞
+                        'pos',   # 主辞の品詞
+                        'sub']   # 主辞についている機能語
 PhraseContent = namedtuple('PhraseContent', PHRASE_CONTENT_FIELD)
 
 ANALYSIS_RESULT_FIELD = ['chunk_dict', 'token_dict', 'tree']
@@ -84,6 +88,9 @@ class DependencyAnalyzer:
 
 
     def extract_representation(self, chunk_dict: OrderedDict, allocation_dict: OrderedDict) -> OrderedDict:
+        """
+        節内の主辞と機能語を取得
+        """
         representation_dict = OrderedDict()
         for chunk_id, chunk_prop in chunk_dict.items():
             chunk_features = chunk_prop.features
@@ -136,8 +143,6 @@ class DependencyAnalyzer:
                     li = token_id
                     break
 
-            # print('[{:2} - {:2}]\trl:{} - rh:{}'.format(ri, li, rl, rh))
-
             words = [
                 token.normalized for token in tokens.values()
                 if token.features.pos in REQUIREMENT_POS_LIST and not self._a_hiragana_pat.match(token.surface) 
@@ -166,6 +171,9 @@ class DependencyAnalyzer:
 
             
     def make_link_dict(self, chunk_dict: OrderedDict, representation_dict: OrderedDict) -> OrderedDict:
+        """
+        係り元から終端の係り先までの係り受け関係を取得
+        """
         visited = []
         link_dict = OrderedDict()
         for chunk_id in chunk_dict.keys():
@@ -183,15 +191,11 @@ class DependencyAnalyzer:
                 link = next_link
                 link_list.append(link)
 
-            # print('link')
-            # pprint(link_list, indent=4)
-
             link_prop_list = []
             for link in link_list:
                 if link not in visited:
                     visited.append(link)
 
-                # print('\t{}\t{}'.format(link, representation_dict[link]))
                 link_prop_list.append(LinkProp(link, representation_dict[link]))
 
             link_dict[chunk_id] = link_prop_list
@@ -275,7 +279,6 @@ class DependencyAnalyzer:
                          token.additional_info,
                          token.chunk)
 
-
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
@@ -298,16 +301,16 @@ if __name__ == "__main__":
     import json
     import os
     import re
+    import pathlib
     
     from split_sentence import Splitter
 
 
-    jf = args.json_file
+    jf = pathlib.Path(args.json_file)
     code = args.code
 
-    review_data = json.load(
-        open(jf, mode='r', encoding=code), object_pairs_hook=OrderedDict
-    )
+    review_data = json.load(jf.open(mode='r', encoding=code),
+                            object_pairs_hook=OrderedDict)
 
     product = review_data['product']
     reviews = review_data['reviews']
@@ -355,17 +358,13 @@ if __name__ == "__main__":
             sentence = '\n'.join(s.strip() for s in sentence_prop.sentence.split('\n'))
             fp.write('"{}"\n\n'.format(sentence))
 
+            fp.write('<sentence_prop.chunk_dict>\n')
             pprint(sentence_prop.chunk_dict, fp)
 
             fp.write('\n{}\n'.format(sentence_prop.result_tree))
 
-            
-
-            # pprint(sentence_prop.token_dict, fp)
-
-            # fp.write('\n')
-
             allocation_dict = da.allocate_token_for_chunk(sentence_prop.chunk_dict, sentence_prop.token_dict)
+            fp.write('<allocation_dict>\n')
             pprint(allocation_dict, fp)
 
             fp.write('\n')

@@ -61,6 +61,7 @@ class AttributionExtractor:
 
     @property
     def category(self) -> str:
+        """現在扱っている商品カテゴリ"""
         return self._category
 
 
@@ -71,6 +72,7 @@ class AttributionExtractor:
 
     @property
     def ja2en(self):
+        """日本語属性名を英語属性名に変換する辞書"""
         return self._ja2en
 
     @property
@@ -116,10 +118,7 @@ class AttributionExtractor:
                         for term in candidate_terms:
                             if term in words :
                                 hit_terms.append(term)
-                                attrs.append(attr)
-
-
-            
+                                attrs.append(attr)            
 
             candidate_terms = WORD_SEPARATOR.join(sorted(set(candidate_term_list), key=candidate_term_list.index))
             hit_terms       = WORD_SEPARATOR.join(sorted(set(hit_terms), key=hit_terms.index))
