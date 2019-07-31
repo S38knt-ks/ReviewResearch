@@ -10,15 +10,19 @@ import math
 
 from pprint import pprint
 from bs4 import BeautifulSoup
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 from tqdm import tqdm
+
+from collect_category_detail import DetailData
+
+ProductReviewURL = namedtuple('ProductReviewURL', ['review_num', 'url'])
 
 
 def load_csv(csv_file):
     df = pandas.read_csv(csv_file)
-    header = df.columns.values.tolist()
-    review, link = header[0], header[-1]
-    return df[[review, link]].values.tolist()
+    header = DetailData(*df.columns.values.tolist())
+    review_num, link = header.review_num, header.link
+    return df[[review_num, link]].values.tolist()
 
 
 def make_review_url(url_list: list) -> OrderedDict:
@@ -26,11 +30,10 @@ def make_review_url(url_list: list) -> OrderedDict:
     url_category = '/product-reviews/'
     url_dict = OrderedDict()
 
-    for url_tuple in url_list:
-        review, url = int(url_tuple[0]), url_tuple[1]
-        review_url = '{}/{}'.format(url.replace('/dp/', url_category), page_placeholder)
-        product = urllib.parse.unquote(url.split('/')[3])
-        url_dict[product] = [review, review_url]
+    for review_num, link in url_list:
+        review_url = '{}/{}'.format(link.replace('/dp/', url_category), page_placeholder)
+        product = urllib.parse.unquote(link.split('/')[3])
+        url_dict[product] = ProductReviewURL(review_num, review_url)
 
     return url_dict
 
@@ -66,9 +69,9 @@ def main(args):
     in_dir = '/'.join(csv_file.split('\\')[:-1])
     
     
-    for product, review_prop in tqdm(url_dict.items(), ascii=True):
-        review, url = review_prop[0], review_prop[1]
-        last_page = calc_last_page(review)
+    for product, product_review_url in tqdm(url_dict.items(), ascii=True):
+        review_num, url = product_review_url
+        last_page = calc_last_page(review_num)
         out_dir = '{}/{}'.format(in_dir, product)
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
@@ -86,11 +89,8 @@ def main(args):
         
         bs = request_url(url, page)
         save_html(out_dir, page, digit, bs.prettify())
-        tqdm.write('[page]\t{}\t[interval]\t{}'.format(
-                '{0:{1}} / {2:{1}}'.format(page, digit, last_page),
-                interval
-            )
-        )
+        tqdm.write('[page]\t{}\t[interval]\t{}'.format('{0:{1}} / {2:{1}}'.format(page, digit, last_page),
+                                                       interval))
 
         if page != last_page:
             for i in range(page+1, last_page+1):
@@ -98,18 +98,13 @@ def main(args):
                 time.sleep(interval)
                 bs = request_url(url, i)
                 save_html(out_dir, i, digit, bs.prettify())
-                tqdm.write('[page]\t{}\t[interval]\t{}'.format(
-                        '{0:{1}} / {2:{1}}'.format(i, digit, last_page),
-                        interval
-                    )
-                )
+                tqdm.write('[page]\t{}\t[interval]\t{}'.format('{0:{1}} / {2:{1}}'.format(i, digit, last_page),
+                                                               interval))
 
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        'csv'
-    )
+    parser.add_argument('csv')
 
     main(parser.parse_args())
