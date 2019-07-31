@@ -3,7 +3,7 @@ import pathlib
 import glob
 
 from functools import partial
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 
 AttrName = namedtuple('AttrName', ['en', 'ja'])
 AttrDictInfo = namedtuple('AttrDictInfo', ['category', 'name', 'words'])
@@ -23,12 +23,12 @@ def read_attr_dict(dic_path):
     category = dic_path.parent.name
     attr_en_name = dic_path.stem
     attr_ja_name = dic_data[0].replace('name:', '')
-    attr_words   = dic_data[1:]
+    attr_words   = tuple(dic_data[1:])
     return AttrDictInfo(category, AttrName(attr_en_name, attr_ja_name), attr_words)
 
 class AttrDictHandler:
 
-    COMMON_DICTIONARY = 'common'
+    COMMON_DICTIONARY = 'commson'
 
     def __init__(self, dic_source_dir):
         """
@@ -38,19 +38,19 @@ class AttrDictHandler:
         self.all_dictionaries = search_attr_dict(self.dic_source_dir)
         
         # 商品カテゴリごとに整理
-        self._category_to_attrdicts = {}
-        self._category_to_en2ja_translater = {}
-        self._category_to_ja2en_translater = {}
+        self._category_to_attrdicts = OrderedDict()
+        self._category_to_en2ja_translater = OrderedDict()
+        self._category_to_ja2en_translater = OrderedDict()
         for dic_path in self.all_dictionaries:
             attr_dict_info = read_attr_dict(dic_path)
             category = attr_dict_info.category
 
             attr_en_name, attr_ja_name = attr_dict_info.name
-            self._category_to_en2ja_translater.setdefault(category, {})[attr_en_name] = attr_ja_name
-            self._category_to_ja2en_translater.setdefault(category, {})[attr_ja_name] = attr_en_name
+            self._category_to_en2ja_translater.setdefault(category, OrderedDict())[attr_en_name] = attr_ja_name
+            self._category_to_ja2en_translater.setdefault(category, OrderedDict())[attr_ja_name] = attr_en_name
 
             attr_words = attr_dict_info.words
-            self._category_to_attrdicts.setdefault(category, {})[attr_ja_name] = attr_words
+            self._category_to_attrdicts.setdefault(category, OrderedDict())[attr_ja_name] = attr_words
 
 
 
@@ -70,6 +70,7 @@ class AttrDictHandler:
     def attr_dict(self, category):
         """
         categoryで指定した属性辞書を返す
+        返される属性辞書は（日本語で表現される属性, 属性語のタプル）のキーバリューとなっている
         """
         return self._category_to_attrdicts[category]
 

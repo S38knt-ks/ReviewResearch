@@ -9,54 +9,52 @@ from pprint import pprint
 
 from nlp.extract_attribution import AttributionExtractor
 
+TP = 'tp'
+TN = 'tn'
+FP = 'fp'
+FN = 'fn'
+
+SENTENCE_PROP_FIELD = ['review_id', 'last_review_id', 'sentence_id', 'last_sentence_id', 'review', 'sentence', 'attr_dict']
+SentencePropWithoutDict = namedtuple('SentencePropWithoutDict', SENTENCE_PROP_FIELD[:-1])
+SentenceProp = namedtuple('SentenceProp', SENTENCE_PROP_FIELD)
+
+INTEGRATED_SENTENCE_PROP_FIELD = [*SENTENCE_PROP_FIELD[:-1], 'label', 'pred']
+IntegratedSentenceProp = namedtuple('IntegratedSentenceProp', INTEGRATED_SENTENCE_PROP_FIELD)
+
+EVALUATION_VALUE_FIELD = ['label', 'pred']
+EvaluationValue = namedtuple('EvaluationValue', EVALUATION_VALUE_FIELD)
+
+EVALUATION_MEASURES = ['accuracy', 'precision', 'recall', 'specificity', 'f_value']
+
+EVALUATION_RESULT_FIELD = [TP, TN, FP, FN, 'errata', *EVALUATION_MEASURES]
+EvaluationResult = namedtuple('EvaluationResult', EVALUATION_RESULT_FIELD)
+
+EVALUATION_RESULT_WITHOUT_ERRATA_FIELD = [TP, TN, FP, FN, *EVALUATION_MEASURES]
+EvaluationResultWithoutErrata = namedtuple('EvaluationResultWithoutErrata', EVALUATION_RESULT_WITHOUT_ERRATA_FIELD)
+
+EVALUATED_SENTENCE_PROP_FIELD = [*SENTENCE_PROP_FIELD[:-1], 'error_or_correct']
+EvaluatedSentenceProp = namedtuple('EvaluatedSentenceProp', EVALUATED_SENTENCE_PROP_FIELD)
 
 class Evaluater:
 
-    TP = 'tp'
-    TN = 'tn'
-    FP = 'fp'
-    FN = 'fn'
-
-    SENTENCE_PROP_FIELD = ['review_id', 'last_review_id', 'sentence_id', 'last_sentence_id', 'review', 'sentence', 'attr_dict']
-    SentencePropWithoutDict = namedtuple('SentencePropWithoutDict', SENTENCE_PROP_FIELD[:-1])
-    SentenceProp = namedtuple('SentenceProp', SENTENCE_PROP_FIELD)
-
-    INTEGRATED_SENTENCE_PROP_FIELD = [*SENTENCE_PROP_FIELD[:-1], 'label', 'pred']
-    IntegratedSentenceProp = namedtuple('IntegratedSentenceProp', INTEGRATED_SENTENCE_PROP_FIELD)
-
-    EVALUATION_VALUE_FIELD = ['label', 'pred']
-    EvaluationValue = namedtuple('EvaluationValue', EVALUATION_VALUE_FIELD)
-
-    EVALUATION_MEASURES = ['accuracy', 'precision', 'recall', 'specificity', 'f_value']
-
-    EVALUATION_RESULT_FIELD = [TP, TN, FP, FN, 'errata', *EVALUATION_MEASURES]
-    EvaluationResult = namedtuple('EvaluationResult', EVALUATION_RESULT_FIELD)
-
-    EVALUATION_RESULT_WITHOUT_ERRATA_FIELD = [TP, TN, FP, FN, *EVALUATION_MEASURES]
-    EvaluationResultWithoutErrata = namedtuple('EvaluationResultWithoutErrata', EVALUATION_RESULT_WITHOUT_ERRATA_FIELD)
-
-    EVALUATED_SENTENCE_PROP_FIELD = [*SENTENCE_PROP_FIELD[:-1], 'error_or_correct']
-    EvaluatedSentenceProp = namedtuple('EvaluatedSentenceProp', EVALUATED_SENTENCE_PROP_FIELD)
-
-
-
     def __init__(self, dic_dir: str, category: str, code='utf-8'):
         self._code = code
-        self._extractor = AttributionExtractor(dic_dir, category)
-        
+        self._extractor = AttributionExtractor(dic_dir)
+        self._extractor.category = category
+        self.category = category
 
     @property
     def code(self) -> str:
         return self._code
 
     @property
-    def dic_dict(self) -> OrderedDict:
-        return self._extractor.dic_dict
+    def ja2en(self) -> OrderedDict:
+        return self._extractor.ja2en
 
 
     @property
     def attr_dict(self) -> OrderedDict:
-        return self._extractor.attr_dict
+        return self._extractor.attrdict
 
 
     def evaluate(self, eval_json_file: str, pred_json_file: str) -> OrderedDict:
@@ -74,7 +72,7 @@ class Evaluater:
             label = data.label
             pred  = data.pred
             for attr in self.attr_dict.keys():
-                evaluation_values_dict[attr].append(self.EvaluationValue(label[attr], pred[attr]))
+                evaluation_values_dict[attr].append(EvaluationValue(label[attr], pred[attr]))
 
 
         errata_dict = OrderedDict()        
@@ -88,10 +86,10 @@ class Evaluater:
 
         # total_attr = len(self.attr_dict)
         eval_dict = OrderedDict()
-        for name in self.EVALUATION_MEASURES:
+        for name in EVALUATION_MEASURES:
             eval_dict[name] = []
 
-        begin_index = len(self.EVALUATION_RESULT_FIELD) - len(self.EVALUATION_MEASURES)
+        begin_index = len(EVALUATION_RESULT_FIELD) - len(EVALUATION_MEASURES)
         for attr, evaluation_result in evaluation_result_dict.items():
             evaluation_measures = evaluation_result[begin_index:]
             if evaluation_result.fn == 0 and evaluation_result.tp == 0:
@@ -99,7 +97,7 @@ class Evaluater:
                 continue
 
             for i, val in enumerate(evaluation_measures):
-                eval_dict[self.EVALUATION_MEASURES[i]].append(val) 
+                eval_dict[EVALUATION_MEASURES[i]].append(val) 
 
 
 
@@ -116,7 +114,7 @@ class Evaluater:
         temp_dict = OrderedDict()
         en_dict = self._ja_attr_to_en_attr(evaluation_result_dict)
         for attr, evaluation_result in en_dict.items():
-            evaluation_result_without_errata = self.EvaluationResultWithoutErrata(
+            evaluation_result_without_errata = EvaluationResultWithoutErrata(
                 *evaluation_result[:4], *evaluation_result[5:]
             )
             temp_dict[attr] = OrderedDict(evaluation_result_without_errata._asdict()) 
@@ -124,14 +122,14 @@ class Evaluater:
         eval_data['evaluation_measure'] = temp_dict
         eval_data['mean_evaluation'] = mean_eval_dict
 
-        end_index = len(self.SENTENCE_PROP_FIELD[:-1])
+        end_index = len(SENTENCE_PROP_FIELD[:-1])
         errata_sentence_dict = OrderedDict()
         for attr, _errata in errata_dict.items():
-            key = '{}_errata'.format(self.dic_dict[attr].name)
+            key = '{}_errata'.format(self.ja2en[attr])
             sentence_dict = OrderedDict()
             for name, idx_list in _errata.items():
                 sentence_dict[name] = [
-                    OrderedDict(self.EvaluatedSentenceProp(*integrated_list[idx][:end_index], name)._asdict())
+                    OrderedDict(EvaluatedSentenceProp(*integrated_list[idx][:end_index], name)._asdict())
                     for idx in idx_list
                 ]
 
@@ -157,7 +155,7 @@ class Evaluater:
     def _ja_attr_to_en_attr(self, j_attr_dict: OrderedDict) -> OrderedDict:
         e_attr_dict = OrderedDict()
         for j_attr, val in j_attr_dict.items():
-            e_attr = self.dic_dict[j_attr].name
+            e_attr = self.ja2en[j_attr]
             e_attr_dict[e_attr] = val
 
         return e_attr_dict
@@ -173,14 +171,14 @@ class Evaluater:
         review   = sentence_dict['review']
         sentence = sentence_dict['sentence']
 
-        return self.SentencePropWithoutDict(review_id, last_review_id, sentence_id, last_sentence_id, review, sentence)
+        return SentencePropWithoutDict(review_id, last_review_id, sentence_id, last_sentence_id, review, sentence)
 
 
     def _allocate_label_sentence_prop(self, sentence_dict: OrderedDict) -> SentenceProp:
         sentence_prop_without_dict = self._allocate_sentence_prop_without_dict(sentence_dict)        
         label_dict = self._eval_attr_to_dict(sentence_dict['attributes'])
 
-        return self.SentenceProp(*sentence_prop_without_dict, label_dict)
+        return SentenceProp(*sentence_prop_without_dict, label_dict)
 
 
     def _read_eval_json(self, eval_json_file: str) -> list:
@@ -198,8 +196,8 @@ class Evaluater:
         pred_dict = OrderedDict()
         if pred_result:
             for attr in self.attr_dict.keys():
-                dic_prop = self.dic_dict[attr]
-                pred_dict[attr] = 1 if dic_prop.name in pred_result.keys() else 0
+                en_attr = self.ja2en[attr]
+                pred_dict[attr] = 1 if en_attr in pred_result.keys() else 0
 
             return pred_dict
 
@@ -214,7 +212,7 @@ class Evaluater:
         sentence_prop_without_dict = self._allocate_sentence_prop_without_dict(sentence_dict)
         pred_dict = self._pred_result_to_dict(sentence_dict['result'])
 
-        return self.SentenceProp(*sentence_prop_without_dict, pred_dict)
+        return SentenceProp(*sentence_prop_without_dict, pred_dict)
 
 
     def _read_pred_json(self, pred_json_file: str) -> list:
@@ -233,7 +231,7 @@ class Evaluater:
 
     def _integrate_sentence_prop(self, label_data: list, pred_data: list) -> list:
         integrated_list = [
-            self.IntegratedSentenceProp(*label_prop[:-1], label_prop.attr_dict, pred_prop.attr_dict)
+            IntegratedSentenceProp(*label_prop[:-1], label_prop.attr_dict, pred_prop.attr_dict)
             for label_prop, pred_prop in zip(label_data, pred_data)
         ]
 
@@ -286,27 +284,27 @@ class Evaluater:
 
     def _calc_evaluation_result(self, evaluation_values: list) -> EvaluationResult:
         errata = OrderedDict()
-        for name in [self.TP, self.TN, self.FP, self.FN]:
+        for name in [TP, TN, FP, FN]:
             errata[name] = []
 
         tp, tn, fp, fn = 0, 0, 0, 0
         for idx, (label, pred) in enumerate(evaluation_values):
             if label == pred:
                 if label == 1:
-                    errata[self.TP].append(idx)
+                    errata[TP].append(idx)
                     tp += 1
 
                 else:
-                    errata[self.TN].append(idx)
+                    errata[TN].append(idx)
                     tn +=1
 
             else:
                 if label == 1:
-                    errata[self.FN].append(idx)
+                    errata[FN].append(idx)
                     fn += 1
 
                 else:
-                    errata[self.FP].append(idx)
+                    errata[FP].append(idx)
                     fp += 1
 
         accuracy    = self._calc_accuracy(tp, tn, fp, fn)
@@ -315,7 +313,7 @@ class Evaluater:
         specificity = self._calc_specificity(tn, fp)
         f_value     = self._calc_f_value(precision, recall)
 
-        return self.EvaluationResult(tp, tn, fp, fn, errata, accuracy, precision, recall, specificity, f_value)
+        return EvaluationResult(tp, tn, fp, fn, errata, accuracy, precision, recall, specificity, f_value)
 
         
 

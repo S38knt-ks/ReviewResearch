@@ -34,13 +34,14 @@ class AttributionExtractor:
     """
 
     def __init__(self, dic_dir: str, code='utf-8', extend=True, ristrict=True):
-        self._category = None
+        self.category  = None
         self._code     = code
         self._extend   = extend
         self._ristrict = ristrict
 
         self._category_to_attrdict = None
         self._ja2en = None
+        self._en2ja = None
 
         self._read_stopword_dic()
 
@@ -62,13 +63,31 @@ class AttributionExtractor:
     @property
     def category(self) -> str:
         """現在扱っている商品カテゴリ"""
-        return self._category
+        return self.__category
 
+    @category.setter
+    def category(self, category):
+        if category is not None and self.category != category:
+            self.__category = category
+            self._build_dictionary()
+
+    def _build_dictionary(self):
+        self._category_to_attrdict = OrderedDict()
+        self._category_to_attrdict[self.category] = self._attr_dict_handler.attr_dict(self.category)
+        self._category_to_attrdict[AttrDictHandler.COMMON_DICTIONARY] = self._common_attr_dict
+        self._ja2en = OrderedDict()
+        for category, attrdict in self._category_to_attrdict:
+            for attr in attrdict:
+                self._ja2en[attr] = self._attr_dict_handler.ja2en(category)[attr]
+
+        self._en2ja = OrderedDict()
+        for ja, en in self.ja2en.items():
+            self._en2ja[en] = ja
+            
 
     @property
     def code(self) -> str:
         return self._code
-
 
     @property
     def ja2en(self):
@@ -76,22 +95,24 @@ class AttributionExtractor:
         return self._ja2en
 
     @property
-    def category_to_attrdict(self) -> OrderedDict:
-        return self._category_to_attrdict
+    def en2ja(self):
+        return self._en2ja
+
+    # @property
+    # def category_to_attrdict(self) -> OrderedDict:
+    #     return self._category_to_attrdict
+
+
+    @property
+    def attrdict(self):
+        return {attr: words for category, attrdict in self._category_to_attrdict.items()
+                            for attr, words in attrdict.items()}
 
     @property
     def stopwords(self) -> list:
         return self._stopwords
 
 
-    def set_category(self, category):
-        if self.category != category:
-            self._category = category
-            self._category_to_attrdict = OrderedDict()
-            self._category_to_attrdict[AttrDictHandler.COMMON_DICTIONARY] = self._common_attr_dict
-            self._category_to_attrdict[category] = self._attr_dict_handler.attr_dict(category)
-            self._ja2en = {attr: self._attr_dict_handler.ja2en(category)[attr] for category, attrdict in self.category_to_attrdict.items()
-                                                                               for attr in attrdict}
             
 
     def extract_attrribution(self, sentence: str) -> OrderedDict:
@@ -113,12 +134,11 @@ class AttributionExtractor:
 
                 candidate_term_list.extend(candidate_terms)
 
-                for attr_dict in self.category_to_attrdict.values():
-                    for attr, words in attr_dict.items():
-                        for term in candidate_terms:
-                            if term in words :
-                                hit_terms.append(term)
-                                attrs.append(attr)            
+                for attr, words in self.attrdict.items():
+                    for term in candidate_terms:
+                        if term in words :
+                            hit_terms.append(term)
+                            attrs.append(attr)            
 
             candidate_terms = WORD_SEPARATOR.join(sorted(set(candidate_term_list), key=candidate_term_list.index))
             hit_terms       = WORD_SEPARATOR.join(sorted(set(hit_terms), key=hit_terms.index))
@@ -135,12 +155,11 @@ class AttributionExtractor:
 
         temp_dict = dict(result_dict)
         result_dict = OrderedDict()
-        for attr_dict in self.category_to_attrdict.values():
-            for attr in attr_dict.keys():
-                if attr in temp_dict.keys():
-                    details = temp_dict[attr]
-                    detail_set = sorted(set(details), key=details.index)
-                    result_dict[attr] = [OrderedDict(detail._asdict()) for detail in detail_set]
+        for attr in self.attrdict:
+            if attr in temp_dict.keys():
+                details = temp_dict[attr]
+                detail_set = sorted(set(details), key=details.index)
+                result_dict[attr] = [OrderedDict(detail._asdict()) for detail in detail_set]
 
         return result_dict
 
@@ -316,7 +335,7 @@ def main(args):
             ave_star = review_data['average_stars']
             stars_dist = review_data['stars_distribution']
 
-            extractor.set_category(category)
+            extractor.category = category
 
             total_review = len(reviews)
             

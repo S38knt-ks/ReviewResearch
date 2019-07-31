@@ -8,7 +8,7 @@ from collections import OrderedDict, namedtuple
 from bs4 import BeautifulSoup
 from pprint import pprint
 
-from mapping_sentences import SentenceMapper
+from mapping_sentences import SentenceMapper, STAR_CORRESPONDENCE_DICT, OTHER_ATTR
 from html_convertor import tag
 from nlp.normalize import normalize
 
@@ -18,31 +18,30 @@ def arrange_content(content_list, tag_name, **attrs):
     return tag(tag_name, content, **attrs)
 
 
+ANCHOR_PROP = ['link_id', 'sentence_info_list']
+AnchorProp  = namedtuple('AnchorProp', ANCHOR_PROP)
+
+STAR_DISPLAY_DICT = {'star1': '★☆☆☆☆',
+                     'star2': '★★☆☆☆',
+                     'star3': '★★★☆☆',
+                     'star4': '★★★★☆',
+                     'star5': '★★★★★'}
 class AttrMapHtmlCreator:
 
-    ANCHOR_PROP = ['link_id', 'sentence_info_list']
-    AnchorProp  = namedtuple('AnchorProp', ANCHOR_PROP)
-
-    STAR_DISPLAY_DICT = {
-        'star1': '★☆☆☆☆',
-        'star2': '★★☆☆☆',
-        'star3': '★★★☆☆',
-        'star4': '★★★★☆',
-        'star5': '★★★★★'
-    }
 
 
     def __init__(self, dic_dir: str, category: str, js_file: str, css_file: str, code='utf-8'):
         self._code = code
 
-        self._mapper = SentenceMapper(dic_dir, category)
+        self._mapper = SentenceMapper(dic_dir)
+        self._mapper.category = category
 
         self._ja_to_en_dict = OrderedDict()
-        for en, ja in self._mapper.en_to_ja_dict.items():
+        for en, ja in self._mapper.en2ja.items():
             self._ja_to_en_dict[ja] = en
 
-        print('<en_to_ja_dict>')
-        pprint(self._mapper.en_to_ja_dict)
+        print('<en2ja>')
+        pprint(self._mapper.en2ja)
         print()
 
 
@@ -112,7 +111,7 @@ class AttrMapHtmlCreator:
         sentence_map_dict = OrderedDict()
         anchor_dict = OrderedDict()
         for en_attr, star_dict in sentence_info_dict.items():
-            attr = self._mapper.en_to_ja_dict[en_attr]
+            attr = self._mapper.en2ja[en_attr]
             sentence_map_dict[attr] = star_dict
 
             star_map_dict    = OrderedDict()
@@ -120,7 +119,7 @@ class AttrMapHtmlCreator:
             for star_str, sentence_info_list in star_dict.items():
                 star_map_dict[star_str] = len(sentence_info_list)
                 anchor = '{}-{}'.format(en_attr, star_str)
-                anchor_prop_dict[star_str] = self.AnchorProp(anchor, sentence_info_list)
+                anchor_prop_dict[star_str] = AnchorProp(anchor, sentence_info_list)
 
             map_dict[attr]    = star_map_dict
             anchor_dict[attr] = anchor_prop_dict
@@ -158,7 +157,7 @@ class AttrMapHtmlCreator:
 
     def _create_heatmap_table(self, map_dict: OrderedDict, anchor_dict: OrderedDict):
         tr_content_list = [tag('th', '属性', cls='first')]
-        values = [self.STAR_DISPLAY_DICT[star_str] for star_str in SentenceMapper.STAR_CORRESPONDENCE_DICT.values()]
+        values = [STAR_DISPLAY_DICT[star_str] for star_str in STAR_CORRESPONDENCE_DICT.values()]
         tr_content_list.extend([tag('th', star_str) for star_str in values[:-1]])
         tr_content_list.append(tag('th', values[-1], cls='last'))
         tr = arrange_content(tr_content_list, 'tr')
@@ -171,7 +170,7 @@ class AttrMapHtmlCreator:
         # print()
 
         for attr in map_dict:
-            if attr != self._mapper.en_to_ja_dict[SentenceMapper.OTHER_ATTR]:
+            if attr != self._mapper.en2ja[OTHER_ATTR]:
                 tr_content_list = [tag('td', tag('a', attr, href='#{}'.format(self._ja_to_en_dict[attr])), cls='stats-title')]
                 # tr_content_list = [tag('td', attr, cls='stats-title')]
                 tr_content_list.extend(
@@ -197,11 +196,11 @@ class AttrMapHtmlCreator:
     def _enum_sentences(self, sentence_info_dict: OrderedDict, anchor_dict: OrderedDict) -> list:        
         enum_content_list = []
         for en_attr in sentence_info_dict.keys():
-            attr = self._mapper.en_to_ja_dict[en_attr]
+            attr = self._mapper.en2ja[en_attr]
             enum_content_list.append(tag('h2', attr, id=en_attr))
             for star_str, anchor_prop in anchor_dict[attr].items():
                 link_id, sentence_info_list = anchor_prop
-                star_disp = self.STAR_DISPLAY_DICT[star_str]
+                star_disp = STAR_DISPLAY_DICT[star_str]
                 enum_content_list.append(tag('h3', '{}：{}'.format(attr, star_disp), id=link_id))
                 if sentence_info_list:
                     ul_content_list = []
@@ -244,16 +243,15 @@ if __name__ == "__main__":
 
     creator = AttrMapHtmlCreator(dic_dir, category, str(js_file), str(css_file))
 
-    json_list = [f for f in glob.glob('{}\\**'.format(input_dir), recursive=True) if os.path.isfile(f) and f.endswith('.json')]
-    map_json_list = [j for j in json_list if os.path.basename(j).startswith('map_')]
+    map_json_list = [f for f in glob.glob('{}\\**'.format(input_dir), recursive=True) 
+                     if pathlib.Path(f).suffix == '.json' and pathlib.Path(f).name.startswith('map_')]
     for map_json in map_json_list:
         html = creator.create(map_json)
-        f_name, _ = os.path.splitext(os.path.basename(map_json))
+        f_name = map_json.stem
+        out_dir = map_json.parent
+        out_file = out_dir / 'detail_{}.html'.format(f_name)
 
-        out_dir = os.path.dirname(map_json)
-        out_file = '{}\\detail_{}.html'.format(out_dir, f_name)
-
-        with open(out_file, mode='w', encoding=creator.code) as fp:
+        with out_file.open(mode='w', encoding=creator.code) as fp:
             fp.write(html)
 
     

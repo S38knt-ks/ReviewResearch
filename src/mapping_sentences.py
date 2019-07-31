@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import pathlib
 import pandas
 import seaborn
 
@@ -10,56 +11,71 @@ import matplotlib.pyplot as plt
 from collections import OrderedDict, namedtuple, defaultdict
 from pprint import pprint
 
-from nlp.extract_attribution import AttributionExtractor
+from nlp.extract_attribution import AttributionExtractor, WORD_SEPARATOR
+
+OTHER_EN_ATTR = 'other'
+OTHER_JA_ATTR = 'その他'
+
+STAR_CORRESPONDENCE_DICT = {1.0: 'star1',
+                            2.0: 'star2',
+                            3.0: 'star3',
+                            4.0: 'star4',
+                            5.0: 'star5'}
+
+SENTENCE_TEMP_INFO_FIELD = ['review',
+                            'sentence',
+                            'candidate_terms',
+                            'hit_terms',
+                            'cooccurrence_words',
+                            'phrases',
+                            'phrase_link_num',
+                            'link_length']
+SentenceTempInfo = namedtuple('SentenceTempInfo', SENTENCE_TEMP_INFO_FIELD)
+
+SENTENCE_INFO_FIELD = [*SENTENCE_TEMP_INFO_FIELD, 'score', 'score_detail']
+SentenceInfo = namedtuple('SentenceInfo', SENTENCE_INFO_FIELD)
 
 class SentenceMapper:
 
-    OTHER_ATTR = 'other'
-
-    STAR_CORRESPONDENCE_DICT = {
-        1.0: 'star1',
-        2.0: 'star2',
-        3.0: 'star3',
-        4.0: 'star4',
-        5.0: 'star5'
-    }
-
-    SENTENCE_TEMP_INFO_FIELD = ['review', 'sentence', 'candidate_terms', 'hit_terms', 'cooccurrence_words', 'phrases', 'phrase_link_num', 'link_length']
-    SentenceTempInfo = namedtuple('SentenceTempInfo', SENTENCE_TEMP_INFO_FIELD)
-
-    SENTENCE_INFO_FIELD = [*SENTENCE_TEMP_INFO_FIELD, 'score', 'score_detail']
-    SentenceInfo = namedtuple('SentenceInfo', SENTENCE_INFO_FIELD)
-
-    def __init__(self, dic_dir: str, category: str, code='utf-8'):
+    def __init__(self, dic_dir: str, code='utf-8'):
         self._code = code
+        self._extractor = AttributionExtractor(dic_dir)
 
-        self._extractor = AttributionExtractor(dic_dir, category)
 
-        self._en_to_ja_dict = OrderedDict()
-        for attr, dic_prop in self.dic_dict.items():
-            self._en_to_ja_dict[dic_prop.name] = attr
+    @property
+    def category(self):
+        return self.__category
 
-        self._en_to_ja_dict[self.OTHER_ATTR] = 'その他'
+    @category.setter
+    def categoty(self, category):
+        if self.category != category:
+            self._extractor.category = category
+            self._build_translator()
+            self.__category = category
 
+    def _build_translator(self):
+        self._en2ja = self._extractor.en2ja
+        self._en2ja[OTHER_EN_ATTR] = OTHER_JA_ATTR
+        self._ja2en = self._extractor.ja2en
+        self._ja2en[OTHER_JA_ATTR] = OTHER_EN_ATTR
+
+    @property
+    def attrdict(self) -> dict:
+        return self._extractor.attrdict
+
+
+    @property
+    def en2ja(self) -> dict:
+        return self._en2ja
+
+    @property
+    def ja2en(self) -> dict:
+        return self._ja2en
 
     @property
     def code(self) -> str:
         return self._code
 
-
-    @property
-    def dic_dict(self) -> OrderedDict:
-        return self._extractor.dic_dict
-
-
-    @property
-    def attr_dict(self) -> OrderedDict:
-        return self._extractor.attr_dict
-
-
-    @property
-    def en_to_ja_dict(self) -> OrderedDict:
-        return self._en_to_ja_dict
 
 
     def create_map(self, pred_json: str) -> OrderedDict:
@@ -68,17 +84,17 @@ class SentenceMapper:
 
         attr_map = OrderedDict()
         co_occurrence_dict = OrderedDict()
-        for attr in self.en_to_ja_dict.keys():
+        for attr in self.en2ja:
             attr_map[attr] = self._make_star_dict()
             co_occurrence_dict[attr] = defaultdict(int)
 
-        attr_map[self.OTHER_ATTR] = self._make_star_dict()
+        attr_map[OTHER_EN_ATTR] = self._make_star_dict()
 
         
 
         for sentence_prop in sentences:
             star = sentence_prop['star']
-            star_str = self.STAR_CORRESPONDENCE_DICT[star]
+            star_str = STAR_CORRESPONDENCE_DICT[star]
 
             review   = sentence_prop['review']
             sentence = sentence_prop['sentence']
@@ -92,14 +108,14 @@ class SentenceMapper:
                     hit_terms = []
                     for ed in extraction_detail_list:
                         # cooccurrence_words.extend(ed['cooccurrence_words'].split(AttributionExtractor.WORD_SEPARATOR))
-                        _phrases = ed['phrases'].split(AttributionExtractor.WORD_SEPARATOR)
+                        _phrases = ed['phrases'].split(WORD_SEPARATOR)
                         phrases.extend(_phrases)
-                        candidate_terms.extend(ed['candidate_terms'].split(AttributionExtractor.WORD_SEPARATOR))
+                        candidate_terms.extend(ed['candidate_terms'].split(WORD_SEPARATOR))
                         cooccurrence_words.extend(
-                            [w for w in ed['cooccurrence_words'].split(AttributionExtractor.WORD_SEPARATOR)
+                            [w for w in ed['cooccurrence_words'].split(WORD_SEPARATOR)
                              if not self._extractor._analyzer._a_hiragana_pat.match(w)]
                         )
-                        hit_terms.extend(ed['hit_terms'].split(AttributionExtractor.WORD_SEPARATOR))
+                        hit_terms.extend(ed['hit_terms'].split(WORD_SEPARATOR))
 
 
 
@@ -113,28 +129,28 @@ class SentenceMapper:
                     # pprint(cooccurrence_words)
 
 
-                    cooccurrence_word = AttributionExtractor.WORD_SEPARATOR.join(cooccurrence_words) if len(cooccurrence_words) > 0 else ''
-                    candidate_terms = AttributionExtractor.WORD_SEPARATOR.join(candidate_terms)
-                    hit_terms = AttributionExtractor.WORD_SEPARATOR.join(hit_terms)
+                    cooccurrence_word = WORD_SEPARATOR.join(cooccurrence_words) if len(cooccurrence_words) > 0 else ''
+                    candidate_terms = WORD_SEPARATOR.join(candidate_terms)
+                    hit_terms = WORD_SEPARATOR.join(hit_terms)
                     
-                    phrases = AttributionExtractor.WORD_SEPARATOR.join(phrases)
-                    sentence_info = self.SentenceTempInfo(review, sentence, candidate_terms, hit_terms,  cooccurrence_word, phrases, len(extraction_detail_list), link_length)                  
+                    phrases = WORD_SEPARATOR.join(phrases)
+                    sentence_info = SentenceTempInfo(review, sentence, candidate_terms, hit_terms,  cooccurrence_word, phrases, len(extraction_detail_list), link_length)                  
                     attr_map[attr][star_str].append(sentence_info)
 
             else:
-                sentence_info = self.SentenceInfo(review, sentence, '', '', '', '', 1, 0, 0, '')
-                attr_map[self.OTHER_ATTR][star_str].append(sentence_info)
+                sentence_info = SentenceInfo(review, sentence, '', '', '', '', 1, 0, 0, '')
+                attr_map[OTHER_EN_ATTR][star_str].append(sentence_info)
 
         scored_attr_map = OrderedDict()
         for attr, star_dict in attr_map.items():
-            if attr != self.OTHER_ATTR:
+            if attr != OTHER_EN_ATTR:
                 scored_attr_map[attr] = self._make_star_dict()
                 for star_str, sentence_temp_info_list in star_dict.items():
                     sentence_info_list = []
                     for sentence_temp_info in sentence_temp_info_list:
                         link_length = sentence_temp_info.link_length
-                        cooccurrence_words = sentence_temp_info.cooccurrence_words.split(AttributionExtractor.WORD_SEPARATOR)
-                        # phrases = sentence_temp_info.phrases.split(AttributionExtractor.WORD_SEPARATOR)
+                        cooccurrence_words = sentence_temp_info.cooccurrence_words.split(WORD_SEPARATOR)
+                        # phrases = sentence_temp_info.phrases.split(WORD_SEPARATOR)
                         counted_words = []
                         for word in cooccurrence_words:
                             val = co_occurrence_dict[attr][word]
@@ -145,7 +161,7 @@ class SentenceMapper:
                         # print(attr)
                         # print(sentence_temp_info)
 
-                        sentence_info = self.SentenceInfo(*sentence_temp_info, score, counted_words)
+                        sentence_info = SentenceInfo(*sentence_temp_info, score, counted_words)
                         sentence_info_list.append(sentence_info)
 
                     scored_attr_map[attr][star_str] = sentence_info_list
@@ -173,7 +189,7 @@ class SentenceMapper:
         for attr, star_dict in scored_attr_map.items():
             sorted_star_dict = OrderedDict()
             for star_str, sentence_info_list in star_dict.items():
-                if attr in self.en_to_ja_dict.keys():
+                if attr in self.en2ja.keys():
                     sorted_sentence_info_list = sorted(sentence_info_list, key=lambda si: si.score, reverse=True)
                     sorted_star_dict[star_str] = [OrderedDict(si._asdict()) for si in sorted_sentence_info_list]
 
@@ -187,34 +203,30 @@ class SentenceMapper:
         return result_dict
 
 
-    def _read_prediction_json(self, pred_json: str) -> list:
-        pred_data = json.load(
-            open(pred_json, mode='r', encoding=self.code),
-            object_pairs_hook=OrderedDict
-        )
-
+    def _read_prediction_json(self, pred_json) -> list:
+        pred_json = pathlib.Path(pred_json)
+        pred_data = json.load(pred_json.open(mode='r', encoding=self.code),
+                              object_pairs_hook=OrderedDict)
         return pred_data
         
 
     
     def _make_star_dict(self) -> OrderedDict:
         star_dict = OrderedDict()
-        for star_str in self.STAR_CORRESPONDENCE_DICT.values():
+        for star_str in STAR_CORRESPONDENCE_DICT.values():
             star_dict[star_str] = []
 
         return star_dict
+
+    
 
 
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        'input_dir'
-    )
-    parser.add_argument(
-        'dic_dir'
-    )
+    parser.add_argument('input_dir')
+    parser.add_argument('dic_dir')
 
     args = parser.parse_args()
 
@@ -227,18 +239,14 @@ if __name__ == "__main__":
     dic_dir = args.dic_dir
     mapper = SentenceMapper(dic_dir, category)
 
-    json_list = [
-        os.path.abspath(f) for f in glob.glob('{}\\**'.format(input_dir), recursive=True)
-        if f.endswith('.json') and os.path.basename(f).startswith('prediction')
-    ]
+    jsonpath_list = [pathlib.Path(f).resolve() for f in glob.glob('{}\\**'.format(input_dir), recursive=True)
+                     if pathlib.Path(f).suffix == '.json' and pathlib.Path(f).name.startswith('prediction')]
     
-    for json_file in json_list:
-        product_dir, file_name = os.path.split(json_file)
-        out_file = '{}\\map_{}'.format(product_dir, file_name)
+    for jsonpath in jsonpath_list:
+        out_file = jsonpath.parent / 'map_{}'.format(jsonpath.name)
+        product_name = jsonpath.parent.name
 
-        product_name = os.path.basename(product_dir)
-
-        map_dict = mapper.create_map(json_file)
+        map_dict = mapper.create_map(jsonpath)
 
         # pprint(map_dict)
 
@@ -246,7 +254,7 @@ if __name__ == "__main__":
         # stars = len(SentenceMapper.STAR_CORRESPONDENCE_DICT.keys())
         # heatmap = np.zeros((stars, attrs-1), dtype=int)
         # for cidx, (attrs, star_dict) in enumerate(map_dict.items()):
-        #     if attrs == SentenceMapper.OTHER_ATTR:
+        #     if attrs == SentenceMapper.OTHER_EN_ATTR:
         #         continue
 
         #     for ridx, (star_str, sentence_info_list) in enumerate(star_dict.items()):
@@ -266,9 +274,5 @@ if __name__ == "__main__":
         # plt.savefig(img_file)
         
 
-        json.dump(
-            map_dict,
-            open(out_file, mode='w', encoding=mapper.code),
-            ensure_ascii=False,
-            indent=4
-        )
+        json.dump(map_dict, out_file.open(mode='w', encoding=mapper.code),
+                  ensure_ascii=False, indent=4)
