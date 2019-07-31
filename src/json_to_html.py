@@ -9,6 +9,7 @@ import json
 import glob
 import pandas
 import os
+import pathlib
 
 from tqdm import tqdm
 from pprint import pprint
@@ -17,41 +18,28 @@ from html_convertor import HtmlConvertor
 
 def main(args):
     input_dir = args.input_dir
-    json_list = [
-        os.path.abspath(f) 
-        for f in glob.glob('{}\\**'.format(input_dir), recursive=True)
-        if f.endswith('.json') and os.path.basename(f).startswith('review')
-    ]
+    json_list = [pathlib.Path(f).resolve() for f in glob.glob('{}\\**'.format(input_dir), recursive=True)
+                                           if pathlib.Path(f).name == 'review.json']
 
     normalize = args.normalize
     mark = args.no_mark
     hc = HtmlConvertor(normalize_mode=normalize, mark=mark)
-    print(hc.__repr__())
-    out_dir = args.out_dir
-    for f in tqdm(json_list, ascii=True):
-        tqdm.write('\n[file] {}'.format(f))
-        html = hc.convert(f)
+    out_dir = pathlib.Path(args.out_dir)
+    for path in tqdm(json_list, ascii=True):
+        tqdm.write('\n[file] {}'.format(path))
+        html = hc.convert(path)
         # break
         # pprint(html)
-        out_name = f.replace('.json', '.html')
+        out_name = path.name.replace('.json', '.html')
         if normalize:
             out_name = out_name.replace('.html', '_normalized.html')
 
         if mark:
             out_name = out_name.replace('.html', '_mark.html')
 
-        product_dir = '{}\\{}\\{}'.format(
-            out_dir, *f.split('\\')[-3:-1]
-        )
-
-        if not os.path.exists(product_dir):
-            os.makedirs(product_dir)
-
-        out_name = '{}\\{}'.format(
-            product_dir, out_name.split('\\')[-1]
-        )
-    
-        with open(out_name, mode='w', encoding='utf-8') as fp:
+        product_dir = out_dir.parent
+        out_name = product_dir / out_name
+        with out_name.open(mode='w', encoding='utf-8') as fp:
             fp.write(html)
 
         # break
