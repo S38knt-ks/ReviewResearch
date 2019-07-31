@@ -22,14 +22,8 @@ TOKEN_TUPLE = Token(*TOKEN_LIST)
 WORD_FIELDS = [TOKEN_TUPLE.surface, 'word']
 Word = namedtuple('Word', WORD_FIELDS)
 
-POS_LIST = [
-    '名詞',
-    '動詞',
-    '形容詞',
-    '形容動詞',
-    # '副詞'
-]
-
+DEFAULT_POS = tuple(['名詞', '動詞', '形容詞'])
+ALL_POS     = DEFAULT_POS + tuple(['副詞', '助詞', '助動詞', '記号'])
 
 class Tokenizer:
     """
@@ -49,7 +43,7 @@ class Tokenizer:
         self._a_hiragana_pat = re.compile(r'[ぁ-ん]')
 
 
-    def get_baseforms(self, text: str, remove_stopwords=True, remove_a_hiragana=True, pos_list=POS_LIST) -> list:
+    def get_baseforms(self, text: str, remove_stopwords=True, remove_a_hiragana=True, pos_list=DEFAULT_POS) -> list:
         """
             形態素解析で得られた結果における原形(または表層)をリスト化して返す
             @param
