@@ -66,48 +66,48 @@ def main(args):
 
 
     # 各商品ごとに相関を見る
-    # print('plot each product...')
-    # each_product_result_dir = outdir / 'each_product'
-    # if not each_product_result_dir.exists():
-    #     each_product_result_dir.mkdir()
+    print('plot each product...')
+    each_product_result_dir = outdir / 'each_product'
+    if not each_product_result_dir.exists():
+        each_product_result_dir.mkdir()
 
-    # correlation_info_list = []
-    # for review_json_path in tqdm(review_jsons, ascii=True):
-    #     date_and_vote_list = extract_date_and_vote(review_json_path)
-    #     date, vote = split_date_and_vote(date_and_vote_list)
-    #     int_date = date_to_int_date(date)
+    correlation_info_list = []
+    for review_json_path in tqdm(review_jsons, ascii=True):
+        date_and_vote_list = extract_date_and_vote(review_json_path)
+        date, vote = split_date_and_vote(date_and_vote_list)
+        int_date = date_to_int_date(date)
 
-    #     product_name = review_json_path.parent.name
-    #     figname = each_product_result_dir / '{}.png'.format(product_name)
-    #     R = plot_correlation(int_date, vote, date, figname)
-    #     correlation_info_list.append(CorrelationInfo(product_name, R))
+        product_name = review_json_path.parent.name
+        figname = each_product_result_dir / '{}.png'.format(product_name)
+        R = plot_correlation(int_date, vote, date, figname)
+        correlation_info_list.append(CorrelationInfo(product_name, R))
 
-    # R_array = np.array([ci.R for ci in correlation_info_list])
-    # mean_R = R_array.mean()
-    # correlation_info_list.append(CorrelationInfo('mean', mean_R))
-    # each_correlation_df = pandas.DataFrame(correlation_info_list)
-    # each_correlation_csvname = each_product_result_dir / 'result.csv'
-    # each_correlation_df.to_csv(each_correlation_csvname, encoding='utf-8', index=None)
+    R_array = np.array([ci.R for ci in correlation_info_list])
+    mean_R = R_array.mean()
+    correlation_info_list.append(CorrelationInfo('mean', mean_R))
+    each_correlation_df = pandas.DataFrame(correlation_info_list)
+    each_correlation_csvname = each_product_result_dir / 'result.csv'
+    each_correlation_df.to_csv(each_correlation_csvname, encoding='utf-8', index=None)
 
     # 全商品を対象に相関を見る
-    # print('plot all product...')
-    # all_product_result_dir = outdir / 'all_product'
-    # if not all_product_result_dir.exists():
-    #     all_product_result_dir.mkdir()
+    print('plot all product...')
+    all_product_result_dir = outdir / 'all_product'
+    if not all_product_result_dir.exists():
+        all_product_result_dir.mkdir()
 
-    # all_date_and_vote_list = []
-    # for review_json_path in tqdm(review_jsons, ascii=True):
-    #     date_and_vote_list = extract_date_and_vote(review_json_path)
-    #     all_date_and_vote_list.extend(date_and_vote_list)
+    all_date_and_vote_list = []
+    for review_json_path in tqdm(review_jsons, ascii=True):
+        date_and_vote_list = extract_date_and_vote(review_json_path)
+        all_date_and_vote_list.extend(date_and_vote_list)
 
-    # date, vote = split_date_and_vote(all_date_and_vote_list)
-    # int_date = date_to_int_date(date)
-    # figname = all_product_result_dir / 'result.png'
-    # plot_correlation(int_date, vote, date, figname)
+    date, vote = split_date_and_vote(all_date_and_vote_list)
+    int_date = date_to_int_date(date)
+    figname = all_product_result_dir / 'result.png'
+    plot_correlation(int_date, vote, date, figname)
 
-    # all_date_and_vote_df = pandas.DataFrame(sorted(all_date_and_vote_list, key=lambda dav: dav.date))
-    # csvname = all_product_result_dir / 'data.csv'
-    # all_date_and_vote_df.to_csv(csvname, encoding='utf-8', index=False)
+    all_date_and_vote_df = pandas.DataFrame(sorted(all_date_and_vote_list, key=lambda dav: dav.date))
+    csvname = all_product_result_dir / 'data.csv'
+    all_date_and_vote_df.to_csv(csvname, encoding='utf-8', index=False)
 
 
     # 評価クラスおよび商品カテゴリごとに分類
