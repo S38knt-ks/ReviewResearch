@@ -123,7 +123,7 @@ dmypy.json
 /*.txt
 
 # 仮想環境の無視
-vcabocha/*
+vresearch/*
 
 # 生成したファイル群(csv, xlsx, html, json)を無視
 /**/*.html
