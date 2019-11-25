@@ -5,9 +5,9 @@ from .attr_dictionary import AttrDictHandler
 from .tokenizer import Tokenizer
 from .tokenizer import TOKEN_LIST
 from .tokenizer import ALL_POS
+from .tokenizer import Word
 from .align_text import TextAlignment
 from .tfidf import TFIDF
-from .alloc_attribute import AttributeAllocation
 from .analyze_dependency import PhraseContent
 from .analyze_dependency import LinkProp
 from .analyze_dependency import REQUIREMENT_POS_LIST
@@ -21,6 +21,5 @@ __all__ = ['normalize',
            'AttrDictHandler',
            'Tokenizer',
            'TextAlignment',
-           'AttributeAllocation',
            'DependencyAnalyzer',
            'AttributionExtractor']

@@ -115,10 +115,7 @@ class AttributionExtractor:
   def stopwords(self) -> list:
       return self._stopwords
 
-
-          
-
-  def extract_attrribution(self, sentence: str) -> OrderedDict:
+  def extract_attribution(self, sentence: str) -> OrderedDict:
       analysis_result = self._analyze(sentence)
       result_list = []
       for link_prop_list in analysis_result.link_dict.values():
@@ -340,7 +337,7 @@ def main(args):
         last_sentence_id = len(sentences)
         for sidx, sentence in sentences.items():
           sentence_id = sidx + 1
-          result_dict = extractor.extract_attrribution(sentence)
+          result_dict = extractor.extract_attribution(sentence)
           editted_dict = OrderedDict()
           for attr, flagment in result_dict.items():
             editted_dict[extractor.ja2en[attr]] = flagment

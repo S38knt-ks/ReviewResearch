@@ -1,10 +1,11 @@
 import argparse
 import re
 from collections import namedtuple
+from typing import List
 
 import emoji
 
-from ..nlp import Tokenizer
+from ..nlp import Tokenizer, Word
 
 ALIGNMENT_FIELDS = ['surface', 'word', 'is_token']
 Alignment = namedtuple('Alignment', ALIGNMENT_FIELDS)
@@ -23,11 +24,11 @@ class TextAlignment:
     self._periods_pat = re.compile(r'。{2,}')
   
   @property
-  def alignment(self) -> list:
+  def alignment(self) -> List[Alignment]:
     return self._alignment_list
 
   @property
-  def words(self) -> list:
+  def words(self) -> List[Word]:
     return self._words
 
   @property
@@ -61,7 +62,7 @@ class TextAlignment:
       self._alignment_list.append(Alignment(target, target, False))
 
   
-  def _adjust_text(self, text: str):
+  def _adjust_text(self, text: str) -> str:
     """絵文字を消したり「。」が2つ以上続いている箇所を「。」1つに直す
 
     Params:

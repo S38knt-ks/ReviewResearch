@@ -2,6 +2,7 @@ import re
 from pprint import pprint
 
 # ひらがなとカタカナ1文字も除外対象
+# TODO: どこでこの処理を行うかが不明瞭
 ONE_HIRAGANA_REGEX = re.compile(r'[ぁ-んァ-ヶ]')
 
 class StopwordRemover:
@@ -17,8 +18,6 @@ class StopwordRemover:
 
   def remove(self, word_list: list):
     removed_word_list = [w for w in word_list if w.word not in self.stopwords]
-    removed_word_list = [w for w in removed_word_list
-                         if not ONE_HIRAGANA_REGEX.match(w.word)]
     return removed_word_list
 
 

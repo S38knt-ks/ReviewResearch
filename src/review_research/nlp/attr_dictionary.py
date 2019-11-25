@@ -27,7 +27,7 @@ def read_attr_dict(dic_path):
 
 class AttrDictHandler:
 
-  COMMON_DICTIONARY = 'commson'
+  COMMON_DICTIONARY = 'common'
 
   def __init__(self, dic_source_dir):
     """イニシャライザ

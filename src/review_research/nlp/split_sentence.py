@@ -1,5 +1,6 @@
 import re
 from collections import OrderedDict
+from typing import List, Dict
 
 REP_MARK = '<SENTENCE>'
 class Splitter:
@@ -8,16 +9,17 @@ class Splitter:
     self._sep_pat = re.compile(pattern)
 
 
-  def split_sentence(self, text: str) -> OrderedDict:
+  def split_sentence(self, text: str) -> Dict[int, str]:
     sentence_list = self._split(text)
     return self._align_sentence(text, sentence_list)
 
 
-  def _split(self, text: str):
+  def _split(self, text: str) -> List[str]:
     sentence_list = self._sep_pat.split(text)
     return sentence_list
 
-  def _align_sentence(self, text: str, sentence_list: list):
+  def _align_sentence(self, text: str, 
+                      sentence_list: List[str]) -> Dict[int, str]:
     rep_text = text[:]
     for s in sentence_list:
       if s != '':

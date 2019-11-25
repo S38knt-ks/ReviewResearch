@@ -6,7 +6,7 @@ from collections import OrderedDict, namedtuple
 
 from tqdm import tqdm
 
-from .nlp import AttributeAllocation
+from .nlp import AttrDictHandler
 from .nlp import Splitter
 
 PRODUCT_NAME = 'product'
@@ -18,7 +18,7 @@ Attribute = namedtuple('Attribute', ATTRIBUTE_FIELD)
 SENTENCE_FIELD = ['review_id', 'last_review_id', 'review', 'sentence_id', 'last_sentence_id', 'sentence', 'attributes']
 
 def set_classes(dic_dir: str, category: str):
-  common_dic_dir_name = AttributeAllocation.COMMON_DIR
+  common_dic_dir_name = AttrDictHandler.COMMON_DICTIONARY
   common_dic_dir = '{}\\{}'.format(dic_dir, common_dic_dir_name)
   common_dics = [dic for dic in glob.glob('{}\\*.txt'.format(common_dic_dir)) if os.path.isfile(dic)]
 

@@ -1,5 +1,6 @@
 import re
 from collections import namedtuple, OrderedDict
+from typing import List
 
 import MeCab
 
@@ -38,33 +39,34 @@ class Tokenizer:
     self._tagger  = MeCab.Tagger('Ochasen')
     self._pat_obj = re.compile('\t|,')
     self.remover = StopwordRemover()
-    self._a_hiragana_pat = re.compile(r'[ぁ-ん]')
 
-
-  def get_baseforms(self, text: str, remove_stopwords=True, remove_a_hiragana=True, pos_list=DEFAULT_POS) -> list:
+  def get_baseforms(self, text: str, 
+                    remove_stopwords=True, remove_a_hiragana=True, 
+                    pos_list: List[str]=DEFAULT_POS) -> List[Word]:
     """形態素解析で得られた結果における原形(または表層)をリスト化して返す
 
     Params:
-      text: str
-        形態素解析にかけたい文
+      text (str): 形態素解析にかけたい文
 
-      pos_list: list (default ['名詞', '動詞', '形容詞', '形容動詞', '副詞'])
+      pos_list (List[str]): 
         品詞のフィルタリングに使うリスト
+        (default ['名詞', '動詞', '形容詞'])
 
-    Return
+    Returns
       pos_listでフィルタリングされて残った、原形(または表層)の単語リスト
     """
-    words = [
-        Word(t.surface, t.base_form) if t.base_form != '*' else Word(t.surface, t.surface)
-        for t in self._tokenize(text) if t.pos in pos_list
-    ]
+    if pos_list is None:
+      words = [decide_word(t) for t in self._tokenize(text)]
+
+    else:  
+      words = [decide_word(t) for t in self._tokenize(text) 
+               if t.pos in pos_list]
 
     if remove_stopwords:
         words = self.remover.remove(words)
             
     if remove_a_hiragana:
-        words = [w for w in words 
-                 if not (self._a_hiragana_pat.match(w.surface) and len(w.surface) == 1)]
+        words = [w for w in words if not is_a_hiragana(w)]
 
     return words
 
@@ -92,3 +94,20 @@ class Tokenizer:
 
       else:
         yield Token(surface, *feature[:TOTAL_FEATURES])
+
+
+def decide_word(token: Token) -> Word:
+  if token.base_form == '*':
+    return Word(token.surface, token.surface)
+
+  else:
+    return Word(token.surface, token.base_form)
+
+ONE_HIRAGANA_REGEX = re.compile(r'[ぁ-ん]')
+HIRAGANAS_REGEX = re.compile(r'[ぁ-ん]{2,}')
+
+def is_a_hiragana(word: Word) -> bool:
+  one_match = ONE_HIRAGANA_REGEX.match(word.word)
+  series_match = HIRAGANAS_REGEX.match(word.word)
+  is_a_hiragana_word = one_match is not None and series_match is None
+  return is_a_hiragana_word and len(word.surface) == 1
