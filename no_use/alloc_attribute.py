@@ -3,9 +3,10 @@ import glob
 from pprint import pprint
 from collections import OrderedDict, namedtuple, Counter
 from functools import partial
+from typing import List
 
-from ..nlp import Tokenizer
-from ..nlp import Splitter
+from review_research.nlp import Tokenizer, Word
+from review_research.nlp import Splitter
 
 INTERSECTION_PROP_FIELD = ['word', 'source', 'target']
 IntersectionProp = namedtuple('IntersectionProp', INTERSECTION_PROP_FIELD)
@@ -54,13 +55,13 @@ class AttributeAllocation:
 
   @property
   def attributes(self) -> list:
-    return [*self._dictionary.keys()]
+    return [*self._dictionary]
 
   @property
-  def intersection_words(self) -> list:
+  def intersection_words(self) -> List[str]:
     return self._intersection_word_list
 
-  def alloc_attribute(self, sentence: str) -> list:
+  def alloc_attribute(self, sentence: str) -> List[SentenceAttribute]:
     # 形態素解析し、単語を取り出す
     word_list = self._tokenizer.get_baseforms(sentence, remove_stopwords=False)
 
@@ -103,15 +104,6 @@ class AttributeAllocation:
     return sentence_attribute_list
 
 
-
-
-
-
-      
-
-
-
-
   def _search_dictionary(self) -> list:
       dic_dir_format = partial('{}\\{}'.format, self.dic_dir)
       common_dic_dir   = dic_dir_format(self.COMMON_DIR)
@@ -140,7 +132,7 @@ class AttributeAllocation:
 
   def _remove_intersection_word(self):
       # 複数属性にまたがる語を抽出
-      attr_list    = [*self.dictionary.keys()]
+      attr_list = self.attributes
       print('<attributes>')
       pprint(attr_list)
       attr_length  = len(self.dictionary)
