@@ -148,3 +148,6 @@ devset/*
 
 # GUI用のフォントの無視
 Fonts/*
+
+# ローカル環境のパスを記述しているファイルの無視
+stopword_dictionary_path.py
