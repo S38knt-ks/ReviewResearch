@@ -30,11 +30,12 @@ class MecabTaggerSingleton(object):
         if not cls._mecab_tagger:
           neologd_path = NeologdDirectoryPathBuilder.get_path()
           try:
-            cls._mecab_tagger = MeCab.Tagger('Ochasen -d {}'.format(neologd_path))
+            arg = 'Ochasen -d {}'.format(neologd_path)
+            cls._mecab_tagger = MeCab.Tagger(arg)
 
           except RuntimeError:
             msg = 'Cannot use dictionary in "{}". So use default dictionary.'
             print(msg.format(neologd_path), file=sys.stderr)
-            cls._tagger = MeCab.Tagger('Ochasen')
+            cls._mecab_tagger = MeCab.Tagger('Ochasen')
 
     return cls._mecab_tagger
