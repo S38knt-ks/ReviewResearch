@@ -1,8 +1,9 @@
+import sys
 from threading import Lock
 
 import CaboCha
 
-from review_research.nlp import NeologdDirectoryPathBuilder
+from ..singleton import NeologdDirectoryPathBuilder
 
 class CabochaParserSingleton(object):
   """係り受け解析器のシングルトンを有するクラス
@@ -33,6 +34,8 @@ class CabochaParserSingleton(object):
             cls._cabocha_parser = CaboCha.Parser(arg)
 
           except RuntimeError:
+            msg = 'Cannot use dictionary in "{}". So use default dictionary.'
+            print(msg.format(neologd_path), file=sys.stderr)
             cls._cabocha_parser = CaboCha.Parser('Ochasen')
 
     return cls._cabocha_parser

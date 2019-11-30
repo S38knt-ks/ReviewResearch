@@ -3,7 +3,7 @@ from threading import Lock
 
 import MeCab
 
-from review_research.nlp import NeologdDirectoryPathBuilder
+from ..singleton import NeologdDirectoryPathBuilder
 
 class MecabTaggerSingleton(object):
   """形態素解析器のシングルトンを有するクラス
