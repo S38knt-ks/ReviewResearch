@@ -3,6 +3,7 @@ from typing import NamedTuple, Tuple, Optional, Dict, List, Set
 import CaboCha
 
 from ..nlp import ONE_HIRAGANA_REGEX
+from ..nlp import HIRAGANAS_REGEX
 
 # CaboChaの解析結果に存在するfeatureの文字列定数
 BEGIN_HEAD_SURFACE_MARK = 'RL'
@@ -123,13 +124,12 @@ class TokenDetail(NamedTuple):
   normalized: str
   feature: TokenFeature
   named_entity: str
-  info: str
   chunk: CaboCha.Chunk
 
   @classmethod
   def from_cabocha_token(cls, token: CaboCha.Token):
     feature = token.feature
-    token_feature = TokenFeature.from_result(feature.split(','))
+    token_feature = TokenFeature.from_result(*feature.split(','))
     if token_feature.base_form == '*':
       token_feature._replace(base_form=token.surface)
 
@@ -238,11 +238,11 @@ class ChunkDetail(NamedTuple):
 
   @classmethod
   def from_phrase_and_chunk(cls, phrase: str, chunk: CaboCha.Chunk):
-    features = tuple(str(chunk.feature_list(i))
-                     for i in range(chunk.feature_list_size))
+    feature_tuple = tuple(str(chunk.feature_list(i))
+                          for i in range(chunk.feature_list_size))
 
     features = dict()
-    for feature in features:
+    for feature in feature_tuple:
       tmp = feature.split(':')
       key = tmp[0]
       val = ''.join(t for t in tmp[1:])
@@ -254,10 +254,11 @@ class ChunkDetail(NamedTuple):
 class PhraseDetail(NamedTuple):
   """文節の詳細情報
 
-  head_surface (str): 主辞の表層
-  head_words (Tuple[WordRepr, ...]): 主辞内の単語
-  part_of_speech (str): 主辞の品詞
-  functional_word (str): 機能語
+  Attributes:
+    head_surface (str): 主辞の表層
+    head_words (Tuple[WordRepr, ...]): 主辞内の単語
+    part_of_speech (str): 主辞の品詞
+    functional_word (str): 機能語
   """
   head_surface: str
   head_words: Tuple[WordRepr, ...]
@@ -291,7 +292,7 @@ class PhraseDetail(NamedTuple):
 
     head_words = []
     for token in head_tokens:
-      is_one_hiragana = ONE_HIRAGANA_REGEX.match(token.surface)
+      is_one_hiragana = _is_a_hiragana(token)
       if token.feature.pos in REQUIREMENT_POS_LIST and not is_one_hiragana:
         head_words.append(WordRepr.from_token_detail(token))
 
@@ -404,8 +405,9 @@ def _extract_phrase_part_of_speech(chunk_feature: Dict[str, str]) -> str:
   else:
     return pos
 
-def _search_tokens_range(begin_surface: str, end_surface: str,
-                         tokens: Dict[str, TokenDetail]) -> List[TokenDetail]:
+def _search_tokens_range(
+    begin_surface: str, end_surface: str,
+    tokens: Dict[str, TokenDetail]) -> List[TokenDetail]:
   """与えられた形態素で囲まれた形態素を返す
 
   Args:
@@ -433,3 +435,8 @@ def _search_tokens_range(begin_surface: str, end_surface: str,
   searched_tokens = [t for i, t in tokens.items()
                      if i in range(begin_index, end_index+1)]
   return searched_tokens
+
+def _is_a_hiragana(token: TokenDetail):
+  is_one_hiragana = ONE_HIRAGANA_REGEX.match(token.feature.base_form)
+  hiraganas = HIRAGANAS_REGEX.match(token.feature.base_form)
+  return is_one_hiragana and hiraganas is None
