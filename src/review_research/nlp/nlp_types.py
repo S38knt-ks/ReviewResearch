@@ -329,18 +329,18 @@ class AttrExtractionResult(NamedTuple):
   """属性抽出の結果を格納
 
   Attributes:
-    attributions (Set[str, ...]): 抽出できた属性
+    attributions (Set[str]): 抽出できた属性
     flagment (str): 係り受け関係をつなげたもの
-    candidate_terms (Set[str, ...]): 属性候補語一覧
-    hit_terms (Set[str, ...]): 属性語として抽出された語群
-    phrases (Set[str, ...]): 文節一覧
+    candidate_terms (Set[str]): 属性候補語一覧
+    hit_terms (Set[str]): 属性語として抽出された語群
+    phrases (Set[str]): 文節一覧
     num_phrases (int): 文節数
   """
-  attributions: Set[str, ...]
+  attributions: Set[str]
   flagment: str
-  candidate_terms: Set[str, ...]
-  hit_terms: Set[str, ...]
-  phrases: Set[str, ...]
+  candidate_terms: Set[str]
+  hit_terms: Set[str]
+  phrases: Set[str]
   num_phrases: int
 
 class AttrExtractionInfo(NamedTuple):
@@ -348,15 +348,15 @@ class AttrExtractionInfo(NamedTuple):
 
   Attributes:
     flagment (str): 係り受け関係をつなげたもの
-    candidate_terms (Set[str, ...]): 属性候補語一覧
-    hit_terms (Set[str, ...]): 属性語として抽出された語群
-    phrases (Set[str, ...]): 文節一覧
+    candidate_terms (Set[str]): 属性候補語一覧
+    hit_terms (Set[str]): 属性語として抽出された語群
+    phrases (Set[str]): 文節一覧
     num_phrases (int): 文節数
   """
   flagment: str
-  candidate_terms: Set[str, ...]
-  hit_terms: Set[str, ...]
-  phrases: Set[str, ...]
+  candidate_terms: Set[str]
+  hit_terms: Set[str]
+  phrases: Set[str]
   num_phrases: int
 
   @classmethod
