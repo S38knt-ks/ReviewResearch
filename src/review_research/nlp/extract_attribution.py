@@ -20,9 +20,6 @@ from ..nlp import COMMON_DICTIONARY_NAME
 from ..nlp import StopwordRemover
 from ..nlp import AttrDictHandler
 
-DICTIONARY_PROP_FIELD = ['name', 'path']
-DictionaryProp = namedtuple('DictionaryProp', DICTIONARY_PROP_FIELD)
-
 class DependencyAnalysisResult(NamedTuple):
   """DependencyAnalyzerの解析結果を格納するクラス
 
