@@ -3,36 +3,30 @@ import pathlib
 import glob
 from functools import partial
 from collections import namedtuple, OrderedDict
+from typing import List, Union, Dict, Tuple
 
-AttrName = namedtuple('AttrName', ['en', 'ja'])
-AttrDictInfo = namedtuple('AttrDictInfo', ['category', 'name', 'words'])
+from ..nlp import AttrName
+from ..nlp import AttrDictInfo
 
-def search_attr_dict(dic_source_dir):
-  glob_recursively = partial(glob.glob, recursive=True)
-  all_dictionaries = [pathlib.Path(f) for f in glob_recursively('{}/**'.format(dic_source_dir))
-                      if pathlib.Path(f).is_file()]
-  return all_dictionaries
+COMMON_DICTIONARY_NAME = 'common'
 
-
-def read_attr_dict(dic_path):
-  dic_path = pathlib.Path(dic_path)
-  with dic_path.open(mode='r', encoding='utf-8') as fp:
-    dic_data = [line.strip() for line in fp.readlines()]
-
-  category = dic_path.parent.name
-  attr_en_name = dic_path.stem
-  attr_ja_name = dic_data[0].replace('name:', '')
-  attr_words   = tuple(dic_data[1:])
-  return AttrDictInfo(category, AttrName(attr_en_name, attr_ja_name), attr_words)
+AttrDict = Dict[str, Tuple[str, ...]]
 
 class AttrDictHandler:
+  """属性辞書を扱うためのクラス
 
-  COMMON_DICTIONARY = 'common'
+  Attributes:
+    dic_source_dir (Union[str, pathlib.Path]): 属性辞書の大本のディレクトリ
+    all_dictionaries (List[pathlib.Path]): すべての辞書ファイルのパス一覧
+    common_attr_dict (AttrDict): 商品カテゴリによらない共通の属性辞書
+    common_en2ja (Dict[str, str]): 共通属性名の英日辞書
+    common_ja2en (Dict[str, str]): 共通属性名の日英辞書
+  """
 
-  def __init__(self, dic_source_dir):
-    """イニシャライザ
-    Params:
-      dic_source_dir: 属性辞書の大本のディレクトリ
+  def __init__(self, dic_source_dir: Union[str, pathlib.Path]):
+    """
+    Args:
+      dic_source_dir (Union[str, pathlib.Path]): 属性辞書の大本のディレクトリ
     """
     self.dic_source_dir = pathlib.Path(dic_source_dir)
     self.all_dictionaries = search_attr_dict(self.dic_source_dir)
@@ -46,46 +40,74 @@ class AttrDictHandler:
       category = attr_dict_info.category
 
       attr_en_name, attr_ja_name = attr_dict_info.name
-      self._category_to_en2ja_translater.setdefault(category, OrderedDict())[attr_en_name] = attr_ja_name
-      self._category_to_ja2en_translater.setdefault(category, OrderedDict())[attr_ja_name] = attr_en_name
+      self._category_to_en2ja_translater.setdefault(
+          category, OrderedDict())[attr_en_name] = attr_ja_name
+      self._category_to_ja2en_translater.setdefault(
+          category, OrderedDict())[attr_ja_name] = attr_en_name
 
       attr_words = attr_dict_info.words
-      self._category_to_attrdicts.setdefault(category, OrderedDict())[attr_ja_name] = attr_words
-
-
-
-  @property
-  def common_attr_dict(self):
-    return self.attr_dict(self.COMMON_DICTIONARY)
+      self._category_to_attrdicts.setdefault(
+          category, OrderedDict())[attr_ja_name] = attr_words
 
   @property
-  def common_en2ja(self):
-    return self.en2ja(self.COMMON_DICTIONARY)
+  def common_attr_dict(self) -> AttrDict:
+    return self.attr_dict(COMMON_DICTIONARY_NAME)
 
   @property
-  def common_ja2en(self):
-    return self.ja2en(self.COMMON_DICTIONARY)
+  def common_en2ja(self) -> Dict[str, str]:
+    return self.en2ja(COMMON_DICTIONARY_NAME)
+
+  @property
+  def common_ja2en(self) -> Dict[str, str]:
+    return self.ja2en(COMMON_DICTIONARY_NAME)
 
 
-  def attr_dict(self, category):
+  def attr_dict(self, category: str) -> AttrDict:
     """categoryで指定した属性辞書を返す
     返される属性辞書は（日本語で表現される属性, 属性語のタプル）のキーバリューとなっている
+
+    Args:
+      category (str): 商品カテゴリ
+
+    Returns:
+      属性辞書
     """
     return self._category_to_attrdicts[category]
 
-  def en2ja(self, category):
-    """categoryで指定した属性名の英日変換辞書を返す"""
+  def en2ja(self, category: str) -> Dict[str, str]:
+    """categoryで指定した属性名の英日変換辞書を返す
+    
+    Args:
+      category (str): 商品カテゴリ
+
+    Returns:
+      属性の英名に対応した和名を格納する辞書
+    """
     return self._category_to_en2ja_translater[category]
 
-  def ja2en(self, category):
-    """categoryで指定した属性名の日英変換辞書を返す"""
+  def ja2en(self, category: str) -> Dict[str, str]:
+    """categoryで指定した属性名の日英変換辞書を返す
+    
+    Args:
+      category (str): 商品カテゴリ
+
+    Returns:
+      属性の和名に対応した英名を格納する辞書
+    """
     return self._category_to_ja2en_translater[category]
 
 
-  def remove_intersection_word(self, category):
-    """categoryで指定した属性辞書において、複数属性にまたがる単語を削除して更新した属性辞書を返す"""
+  def remove_intersection_word(self, category: str) -> AttrDict:
+    """categoryで指定した属性辞書において、複数属性にまたがる単語を削除して更新した属性辞書を返す
+    
+    Args:
+      category (str): 商品カテゴリ
+
+    Returns:
+      更新した属性辞書
+    """
     attr_dict = self.attr_dict(category)
-    attr_list = [*attr_dict.keys()]
+    attr_list = [*attr_dict]
     attr_num  = len(attr_list)
     intersection_word_dict = {}
     for target_idx, target_attr in enumerate(attr_list[:-1]):
@@ -111,3 +133,46 @@ class AttrDictHandler:
         new_attr_dict[attr_name] = new_words
 
       return new_attr_dict
+
+
+def search_attr_dict(dic_source_dir: str) -> List[pathlib.Path]:
+  """
+  指定したディレクトリから属性辞書のファイルパスをすべて取り出す
+
+  Args:
+    dic_source_dir (str): 属性辞書が入っているディレクトリ
+
+  Returns:
+    属性辞書のパス一覧
+  """
+  glob_recursively = partial(glob.glob, recursive=True)
+  target = '{}/**'.format(dic_source_dir)
+  all_dictionaries = [pathlib.Path(f) for f in glob_recursively(target)
+                      if pathlib.Path(f).is_file()]
+  return all_dictionaries
+
+
+def read_attr_dict(dic_path: Union[str, pathlib.Path]) -> AttrDictInfo:
+  """属性辞書を読み取り、その情報をまとめる
+
+  Args:
+    dic_path (Union[str, pathlib.Path]): 属性辞書ファイルのパス
+
+  Returns:
+    AttrDicInfoインスタンス
+  """
+  dic_path = pathlib.Path(dic_path)
+  with dic_path.open(mode='r', encoding='utf-8') as fp:
+    header = line = fp.readline()
+    attr_ja_name = header.strip().replace('name:', '')
+    attr_words = list()
+    while line != '':
+      line = fp.readline().strip()
+      attr_words.append(line)
+
+  category = dic_path.parent.name
+  attr_en_name = dic_path.stem
+  attr_words   = tuple(attr_words)
+  return AttrDictInfo(category, 
+                      AttrName(attr_en_name, attr_ja_name),
+                      attr_words)

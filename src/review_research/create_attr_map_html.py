@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 
 from . import SentenceMapper, STAR_CORRESPONDENCE_DICT
 from review_research import tag
-from nlp import normalize
+from .nlp import normalize
 
 
 def arrange_content(content_list, tag_name, **attrs):

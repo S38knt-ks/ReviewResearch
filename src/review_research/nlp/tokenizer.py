@@ -1,48 +1,39 @@
-import re
+import sys
 from collections import namedtuple, OrderedDict
-from typing import List
+from typing import List, Iterator
 
-import MeCab
-
+from ..nlp import ONE_HIRAGANA_REGEX
+from ..nlp import HIRAGANAS_REGEX
+from ..nlp import MECAB_RESULT_SPLIT_REGEX
+from ..nlp import MecabTaggerSingleton
+from ..nlp import Token
+from ..nlp import WordRepr
 from ..nlp import StopwordRemover
-
-TOKEN_LIST = ['surface',
-              'pos',
-              'pos_detail1',
-              'pos_detail2',
-              'pos_detail3',
-              'infl_type',
-              'infl_form',
-              'base_form',
-              'reading',
-              'phonetic']
-Token = namedtuple('Token', TOKEN_LIST)
-TOKEN_TUPLE = Token(*TOKEN_LIST)
-
-WORD_FIELDS = [TOKEN_TUPLE.surface, 'word']
-Word = namedtuple('Word', WORD_FIELDS)
 
 DEFAULT_POS = tuple(['名詞', '動詞', '形容詞'])
 ALL_POS     = DEFAULT_POS + tuple(['副詞', '助詞', '助動詞', '記号'])
 
-TOTAL_FEATURES = 9
-
-class Tokenizer:
+class Tokenizer(object):
   """
+  形態素解析器のラッパー
+
   Usage:
     >>> tokenizer = Tokenizer()
     >>> text = '何らかの文章'
     >>> word_list = tokenizer.get_baseforms(text)
   """
+  _tagger = None
 
   def __init__(self):
-    self._tagger  = MeCab.Tagger('Ochasen')
-    self._pat_obj = re.compile('\t|,')
     self.remover = StopwordRemover()
 
+  @property
+  def tagger(self):
+    return MecabTaggerSingleton.get_instance()
+
   def get_baseforms(self, text: str, 
-                    remove_stopwords=True, remove_a_hiragana=True, 
-                    pos_list: List[str]=DEFAULT_POS) -> List[Word]:
+                    remove_stopwords = True, remove_a_hiragana = True, 
+                    pos_list: List[str] = DEFAULT_POS) -> List[WordRepr]:
     """形態素解析で得られた結果における原形(または表層)をリスト化して返す
 
     Params:
@@ -56,58 +47,52 @@ class Tokenizer:
       pos_listでフィルタリングされて残った、原形(または表層)の単語リスト
     """
     if pos_list is None:
-      words = [decide_word(t) for t in self._tokenize(text)]
+      words = [WordRepr.from_token(t) for t in self._tokenize(text)]
 
     else:  
-      words = [decide_word(t) for t in self._tokenize(text) 
+      words = [WordRepr.from_token(t) for t in self._tokenize(text) 
                if t.pos in pos_list]
 
     if remove_stopwords:
-        words = self.remover.remove(words)
+      words = self.remover(words)
             
     if remove_a_hiragana:
-        words = [w for w in words if not is_a_hiragana(w)]
+      words = [w for w in words if not is_a_hiragana(w)]
 
     return words
 
+  def _tokenize(self, text: str) -> Iterator[Token]:
+    """形態素解析のラッパーメソッド
 
-  def _tokenize(self, text: str):
-    self._tagger.parse('')
-    result = self._tagger.parse(text)
-    sentences = result.strip().split('\n')
-    chunk_list = [self._pat_obj.split(line) for line in sentences 
+    Args:
+      text (str): 文
+
+    Yields:
+      Tokenインスタンスのジェネレータ
+    """
+    self.tagger.parse('')  # 形態素解析器の初期設定
+    result = self.tagger.parse(text)
+    lines = result.strip().split('\n')
+    chunk_list = [MECAB_RESULT_SPLIT_REGEX.split(line) for line in lines 
                   if line != u'EOS']
     for chunks in chunk_list:
       if len(chunks) <= 1:
         continue
 
-      surface, *feature = chunks
-      num_features = len(feature)
-      if num_features == TOTAL_FEATURES:
-        yield Token(surface, *feature)
-
-      # print(feature)
-      elif num_features < TOTAL_FEATURES:
-        lack = TOTAL_FEATURES - num_features
-        feature.extend(['' for _ in range(lack)])
-        yield Token(surface, *feature)
-
-      else:
-        yield Token(surface, *feature[:TOTAL_FEATURES])
+      surface, *features = chunks
+      yield Token.from_mecab_result(surface, *features)
 
 
-def decide_word(token: Token) -> Word:
-  if token.base_form == '*':
-    return Word(token.surface, token.surface)
+def is_a_hiragana(word: WordRepr) -> bool:
+  """与えられた単語が1文字の平仮名かどうかのチェック
 
-  else:
-    return Word(token.surface, token.base_form)
+  Args:
+    word (WordRepr): 単語
 
-ONE_HIRAGANA_REGEX = re.compile(r'[ぁ-ん]')
-HIRAGANAS_REGEX = re.compile(r'[ぁ-ん]{2,}')
-
-def is_a_hiragana(word: Word) -> bool:
-  one_match = ONE_HIRAGANA_REGEX.match(word.word)
-  series_match = HIRAGANAS_REGEX.match(word.word)
+  Returns:
+    wordが1文字の平仮名ならTrue、そうでなければFalse
+  """
+  one_match = ONE_HIRAGANA_REGEX.match(word.base_form)
+  series_match = HIRAGANAS_REGEX.match(word.base_form)
   is_a_hiragana_word = one_match is not None and series_match is None
   return is_a_hiragana_word and len(word.surface) == 1

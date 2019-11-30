@@ -5,7 +5,8 @@ from collections import OrderedDict, namedtuple, Counter
 from functools import partial
 from typing import List
 
-from review_research.nlp import Tokenizer, Word
+from review_research.nlp import Tokenizer
+from review_research.nlp import WordRepr
 from review_research.nlp import Splitter
 
 INTERSECTION_PROP_FIELD = ['word', 'source', 'target']
