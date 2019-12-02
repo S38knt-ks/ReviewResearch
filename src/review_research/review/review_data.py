@@ -5,12 +5,12 @@ from collections import namedtuple, OrderedDict
 from collections.abc import Sequence, Mapping
 from typing import Union, Tuple, Iterable, NoReturn
 
-INFO_FIELDS = ['date',   # 日付
-               'star',   # 評価の星の数
-               'vote',   # 投票数（「x人のお客様がこれが役に立ったと考えています」におけるx）
-               'name',   # レビュアー名
-               'title',  # レビューのタイトル
-               'review'] # レビュー文
+INFO_FIELDS = ['date',    # 日付
+               'star',    # 評価の星の数
+               'vote',    # 投票数(「 x 人のお客様がこれが役に立ったと考えています」における x)
+               'name',    # レビュアー名
+               'title',   # レビューのタイトル
+               'review',] # レビュー文
 ReviewInfo = namedtuple('ReviewInfo', INFO_FIELDS)
 
 STARS_DISTRIBUTION = ['star1', 'star2', 'star3', 'star4', 'star5']
@@ -29,7 +29,7 @@ class ReviewPageJSON(object):
     total_reviews (int): 総レビュー数
     real_reviews (int): 実際のレビュー数(ある程度の数だけ抽出したときは、total_reviewsと一致しない)
     stars_distribution (StarsDistribution): 評価分布
-    reviews (Tuple[str, ...]): レビュー文の一覧
+    reviews (Union[Tuple[()], Tuple[ReviewInfo, ...]]): レビュー文の一覧
 
   Usage:
     インスタンス生成
@@ -50,7 +50,7 @@ class ReviewPageJSON(object):
       category: str = '', average_stars: float = 0.0, 
       total_reviews: int = 0, real_reviews: int = 0, 
       stars_distribution:StarsDistribution = StarsDistribution(0, 0, 0, 0, 0),
-      reviews: Union[Tuple[()], Tuple[str, ...]] = tuple()):
+      reviews: Union[Tuple[()], Tuple[ReviewInfo, ...]] = tuple()):
     self.link = link
     self.maker = maker
     self.product = product
