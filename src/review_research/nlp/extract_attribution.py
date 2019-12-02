@@ -1,7 +1,7 @@
 import os
 from collections import OrderedDict, namedtuple, defaultdict
 from pprint import pprint
-from typing import NamedTuple, Iterable, List, Any, Tuple, NoReturn
+from typing import NamedTuple, Iterable, List, Any, Tuple, NoReturn, Dict
 
 from tqdm import tqdm
 
@@ -105,7 +105,15 @@ class AttributionExtractor:
   def stopwords(self) -> list:
     return self.remover.stopwords
 
-  def extract_attribution(self, text: str) -> OrderedDict:
+  def extract_attribution(self, text: str) -> Dict[str, Tuple[Dict[str, Any]]]:
+    """属性の抽出を行う
+
+    Args:
+      text (str): 属性を抽出したい文
+
+    Returns:
+      抽出できた属性ごとに属性に関する情報をまとめた辞書
+    """
     analysis_result = self._analyze(text)
     result_list = []
     for linkdetails in analysis_result.link_dict.values():
@@ -149,7 +157,7 @@ class AttributionExtractor:
     temp_dict = dict(result_dict)
     result_dict = OrderedDict()
     for attr in self.attrdict:
-      if attr in temp_dict.keys():
+      if attr in temp_dict:
         info_list = temp_dict[attr]
         info_set = _unique_sort_by_index(info_list)
         result_dict[attr] = tuple(OrderedDict(info._asdict()) 
@@ -258,7 +266,8 @@ class AttributionExtractor:
     """属性辞書の更新
     """
     self._category_to_attrdict = OrderedDict()
-    self._category_to_attrdict[category] = self._attrdict_handler.attr_dict(category)
+    self._category_to_attrdict[category] \
+        = self._attrdict_handler.attr_dict(category)
     self._category_to_attrdict[COMMON_DICTIONARY_NAME] = self._common_attr_dict
     self._ja2en = OrderedDict()
     for _category, attrdict in self._category_to_attrdict:
@@ -288,7 +297,8 @@ def _is_good_functional_word(functional_word: str) -> bool:
   return functional_word != 'の' and \
          functional_word not in PAEALLEL_PRESENTATION_WORDS
 
-def _convert_link_to_flagment(link_list: Tuple[int, ...], chunk_dict: ChunkDict) -> str:
+def _convert_link_to_flagment(
+    link_list: Tuple[int, ...], chunk_dict: ChunkDict) -> str:
   """係り順に文節をつなげる
 
   Args:
@@ -310,104 +320,3 @@ def _unique_sort_by_index(iterable: Iterable[Any]) -> Iterable[Any]:
     与えられたiterableから重複をなくして出現順にソートしたもののリスト
   """
   yield from sorted(set(iterable), key=iterable.index)
-
-def main(args):
-  sp = Splitter()
-
-  SENTENCE_PROP_FIELD = ['review_id', 'last_review_id', 
-                         'sentence_id', 'last_sentence_id',
-                         'star', 'title', 'review', 'sentence', 'result']
-  SentenceProp = namedtuple('SentenceProp', SENTENCE_PROP_FIELD)
-
-  dic_dir = pathlib.Path(args.dic_dir)
-  review_dir = pathlib.Path(args.review_dir)
-
-  glob_recursively = partial(glob.glob, recursive=True)
-  all_files = glob_recursively('{}/**'.format(review_dir))
-  review_jsons = [pathlib.Path(f).resolve() for f in all_files
-                  if pathlib.Path(f).name == 'review.json']
-
-  OPTION_FIELD = ['is_extended', 'is_ristrict']
-  Option = namedtuple('Option', OPTION_FIELD)
-
-  option_list = [Option(False, False), 
-                 Option(False, True),
-                 Option(True, False),
-                 Option(True, True)]
-          
-  extractor = AttributionExtractor(dic_dir)
-
-  for json_path in tqdm(review_jsons, ascii=True):
-    for option in option_list:
-      extention    = '_extended' if option.is_extended else ''
-      restricition = '_ristrict' if option.is_ristrict else ''
-
-      extractor._extend = option.is_extended
-      extractor._ristrict = option.is_ristrict
-
-      out_file = json_path.parent / 'prediction{}{}.json'.format(extention, restricition)            
-
-      review_data = json.load(json_path.open(mode='r', encoding='utf-8'),
-                              object_pairs_hook=OrderedDict)
-      reviews = review_data['reviews']
-      category = review_data['category']
-      product_name = review_data['product']
-      link = review_data['link']
-      maker = review_data['maker']
-      ave_star = review_data['average_stars']
-      stars_dist = review_data['stars_distribution']
-
-      extractor.category = category
-      total_review = len(reviews)
-      last_review_id = total_review
-      sentence_prop_list = []
-      for idx, review_info in enumerate(reviews):
-        star   = review_info['star']
-        title  = review_info['title']
-        review = review_info['review']
-        # vote   = review_info['vote']
-        review_id = idx + 1
-
-        sentences = sp.split_sentence(normalize(review))
-        last_sentence_id = len(sentences)
-        for sidx, sentence in sentences.items():
-          sentence_id = sidx + 1
-          result_dict = extractor.extract_attribution(sentence)
-          editted_dict = OrderedDict()
-          for attr, flagment in result_dict.items():
-            editted_dict[extractor.ja2en[attr]] = flagment
-
-          sentence_prop_list.append(
-            SentenceProp(review_id, last_review_id,
-                         sentence_id, last_sentence_id,
-                         star, title, review, sentence, editted_dict))
-
-      total_sentence = len(sentence_prop_list)
-      out_data = OrderedDict()
-      out_data['input_file'] = str(json_path)
-      out_data['product'] = product_name
-      out_data['link'] = link
-      out_data['maker'] = maker
-      out_data['average_stars'] = ave_star
-      out_data['star_distribuition'] = stars_dist
-      out_data['total_review'] = total_review
-      out_data['total_sentence'] = total_sentence
-      out_data['sentences'] = [sentence_prop._asdict() for sentence_prop in sentence_prop_list]
-
-      json.dump(out_data, out_file.open(mode='w', encoding='utf-8'), 
-                ensure_ascii=False, indent=4)
-
-
-if __name__ == "__main__":
-  import argparse
-  import json
-  import pathlib
-  import glob
-  from functools import partial
-
-  from ..nlp import Splitter
-  from ..nlp import normalize
-  
-  parser = argparse.ArgumentParser()
-  parser.add_argument('dic_dir')
-  parser.add_argument('review_dir')

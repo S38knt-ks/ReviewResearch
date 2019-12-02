@@ -36,12 +36,3 @@ class StopwordRemover(object):
     """
     removed_word_list = [w for w in word_list if w.base_form not in self.stopwords]
     return removed_word_list
-
-StopwordRemover.__call__.__doc__ = StopwordRemover.remove.__doc__
-
-def main():
-  sr = StopwordRemover()
-  pprint(sr.stopwords)
-
-if __name__ == "__main__":
-  main()
