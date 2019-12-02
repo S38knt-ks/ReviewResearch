@@ -4,22 +4,51 @@ import time
 import random
 import urllib.request
 from pprint import pprint
+from typing import List, Tuple
 
 import pandas
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 
-def read_txt(txt: str, encode='utf-8') -> (list, pandas.DataFrame):
-  with open(txt, mode='r', encoding=encode) as fp:
+def read_txt(txt: str,
+             encoding: str = 'utf-8') -> Tuple(List[str], pandas.DataFrame):
+  """指定されたフォーマットで書かれた、 txt ファイルを読み込む
+  フォーマットに関しては次の通り
+
+  # 「# 」から始まる行はコメントとして扱われる
+  # DetaFrameのヘッダ情報(商品カテゴリ, 商品一覧ページのページ数, 商品一覧ページ)
+  category, last_page, link
+  # 次の行から「, 」区切りでヘッダ情報に基づいた値が埋められる(下記は例)
+  camera, 10, https://www.amazon.com
+
+  Args:
+    txt (str): 上記フォーマットで記述された txt ファイル
+    encoding (str): ファイルエンコーディング
+
+  Returns:
+    txt で与えられた情報をまとめたもの
+  """
+  with open(txt, mode='r', encoding=encoding) as fp:
     content = [line.strip().split(', ') for line in fp.readlines()
                if not(line == ('\n')) and not(line.startswith('# '))]
 
-  columns, data = content[0],content[1:]
+  columns, data = content[0], content[1:]
   return columns, pandas.DataFrame(data, columns=columns) 
 
 
-def search_target(category: str, df: pandas.DataFrame, header: list) -> list:
+def search_target(category: str, df: pandas.DataFrame, 
+                  header: List[str]) -> List[str]:
+  """指定された商品カテゴリと一致した情報を取得
+
+  Args:
+    category (str): 商品カテゴリ
+    df (pandas.DataFrame): txt ファイル内の情報を格納したもの
+    header (List[str]): df のヘッダ
+
+  Returns:
+    商品カテゴリ, 商品一覧ページのページ数, 商品一覧ページのURL
+  """
   category_list = df[header[0]].values.tolist()
   if category not in category_list:
     print()
@@ -32,12 +61,21 @@ def search_target(category: str, df: pandas.DataFrame, header: list) -> list:
 
 
 def replace_page(url: str, page: int) -> str:
-  _ref = 'ref=sr_pg_{}'
-  _pag = 'page={}'
-  ref_target  = _ref.format(page - 1)
-  pag_target = _pag.format(page - 1)
-  ref = _ref.format(page)
-  pag = _pag.format(page)
+  """URL を部分的に置換する
+
+  Args:
+    url (str): 対象となる URL
+    page (int): ページ番号
+
+  Returns:
+    置換された URL
+  """
+  ref_fmt = 'ref=sr_pg_{}'
+  page_fmt = 'page={}'
+  ref_target  = ref_fmt.format(page - 1)
+  pag_target = page_fmt.format(page - 1)
+  ref = ref_fmt.format(page)
+  pag = page_fmt.format(page)
   return url.replace(ref_target, ref).replace(pag_target, pag)
 
 def main(args):

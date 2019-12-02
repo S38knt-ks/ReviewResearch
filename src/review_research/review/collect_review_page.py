@@ -8,6 +8,7 @@ import glob
 import math
 from pprint import pprint
 from collections import OrderedDict, namedtuple
+from typing import List, Union, Tuple, Dict, NoReturn
 
 import pandas
 from bs4 import BeautifulSoup
@@ -15,51 +16,108 @@ from tqdm import tqdm
 
 from ..review import DetailData
 
+# レビューページフォーマットは以下のようになる
+# 'ref=cm_cr_getr_d_paging_btm_{0}?ie=UTF8&reviewerType=all_reviews&pageNumber={0}'
+REVIEW_PAGE_FMT = ('ref=cm_cr_getr_d_paging_btm_{0}'
+                   '?ie=UTF8&reviewerType=all_reviews&pageNumber={0}')
+
 ProductReviewURL = namedtuple('ProductReviewURL', ['review_num', 'url'])
 
-def load_csv(csv_file):
+def load_csv(csv_file: str) -> List[Tuple[int, str]]:
+  """商品に関する情報のうち必要な情報を取り出す
+
+  Args:
+    csv_file (str): 商品レビューを抽出したい商品一覧が記述されているcsvファイル
+
+  Returns:
+    レビュー数と商品ページへのURLの一覧
+  """
   df = pandas.read_csv(csv_file)
   header = DetailData(*df.columns.values.tolist())
   review_num, link = header.review_num, header.link
   return df[[review_num, link]].values.tolist()
 
-def make_review_url(url_list: list) -> OrderedDict:
-  page_placeholder = 'ref=cm_cr_getr_d_paging_btm_{0}?ie=UTF8&reviewerType=all_reviews&pageNumber={0}'
+def make_review_url(
+    url_list: List[Tuple[int, str]]) -> Dict[str, ProductReviewURL]:
+  """商品情報一覧から、商品名とそのページへのURLを対応させる
+
+  Args:
+    url_list (List[Tuple[int, str]]): 商品情報一覧
+
+  Returns:
+    商品名とそのページへのURLを対応させた辞書
+  """
   url_category = '/product-reviews/'
   url_dict = OrderedDict()
 
   for review_num, link in url_list:
-    review_url = '{}/{}'.format(link.replace('/dp/', url_category), page_placeholder)
+    review_url = '{}/{}'.format(link.replace('/dp/', url_category),
+                                REVIEW_PAGE_FMT)
     product = urllib.parse.unquote(link.split('/')[3])
     url_dict[product] = ProductReviewURL(review_num, review_url)
 
   return url_dict
 
-def calc_last_page(review):
-  if review > 10:
-    return math.ceil(review / 10.0)
+def calc_last_page(num_reviews: int) -> int:
+  """商品レビューページの最後のページ番号を計算する
+
+  Args:
+    num_reviews (int): レビュー数
+
+  Returns:
+    最後のページ番号
+  """
+  if num_reviews > 10:
+    return math.ceil(num_reviews / 10.0)
 
   return 1
 
-def get_current_page(product_dir):
+def get_current_page(product_dir: str) -> int:
+  """現在保存されているレビューページ数を取得する
+
+  Args:
+    product_dir (str): 商品レビューを保存するディレクトリ
+
+  Returns:
+    現在保存されているレビューページ数
+  """
   return len(glob.glob('{}/*.html'.format(product_dir)))
 
   
-def request_url(url, page):
-  url  = url.format(page)
+def request_url(url: str, page: int) -> BeautifulSoup:
+  """指定された URL とページ番号から対応する商品レビューページを取得し、
+  そのレビューページのコンテンツを取得する
+
+  Args:
+    url (str): 商品レビューページの URL フォーマット
+    page (int): ページ番号
+
+  Returns:
+    商品レビューページのコンテンツ
+  """
+  url = url.format(page)
   html = urllib.request.urlopen(url).read()
-  bs   = BeautifulSoup(html, 'lxml')
+  bs = BeautifulSoup(html, 'lxml')
   return bs
 
 
-def save_html(out_dir, page, digit, text):
+def save_html(out_dir: str, page: int, 
+              digit: int, html_content: str) -> NoReturn:
+  """読み取った商品レビュー html を保存する
+
+  Args:
+    outdir (str): 保存先ディレクトリ
+    page (int): ページ番号
+    digit (int): ページ番号の桁数
+    html_content (str): 商品レビューの html
+  """
   out_file = '{}/page_{}.html'.format(out_dir, str(page).zfill(digit))
   with open(out_file, mode='w', encoding='utf-8') as fp:
-    fp.write(text)
+    fp.write(html_content)
 
 
 def main(args):
-  csv_file = args.csv
+  csv_file = args.sample_csv
   url_dict = make_review_url(load_csv(csv_file))
 
   in_dir = '/'.join(csv_file.split('\\')[:-1])
@@ -99,6 +157,8 @@ def main(args):
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('csv')
+  parser.add_argument('sample_csv',
+                      help=('商品レビューを抽出したい商品一覧が'
+                            '記述されているcsvファイル'))
 
   main(parser.parse_args())

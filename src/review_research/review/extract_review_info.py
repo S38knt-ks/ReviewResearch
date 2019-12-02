@@ -8,8 +8,10 @@ import time
 import traceback
 from pprint import pprint, pformat
 from collections import namedtuple, OrderedDict
+from typing import NoReturn, Iterable, Union, List
 
 import numpy as np
+import bs4
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
@@ -20,22 +22,25 @@ FIND_ATTRS = ['name', 'attrs']
 FindAttrs = namedtuple('find_attrs', FIND_ATTRS)
 
 # レビューページ上部に表示されている情報を取得するためのパラメータ
-LINK_FINDATTRS          = FindAttrs('link', {'rel': 'canonical'})
-PRODUCT_DIV_FINDATTRS   = FindAttrs('div',  {'role': 'main'})
-MAKER_FINDATTRS         = FindAttrs('div',  {'class': 'a-row product-by-line'})
-AVERAGE_STAR_FINDATTRS  = FindAttrs('i',    {'data-hook': 'average-star-rating'})
-TOTAL_REVIEWS_FINDATTRS = FindAttrs('span', {'class'    : 'a-size-medium totalReviewCount',
-                                             'data-hook': 'total-review-count'})
+LINK_FINDATTRS = FindAttrs('link', {'rel': 'canonical'})
+PRODUCT_DIV_FINDATTRS = FindAttrs('div', {'role': 'main'})
+MAKER_FINDATTRS = FindAttrs('div', {'class': 'a-row product-by-line'})
+AVERAGE_STAR_FINDATTRS = FindAttrs('i', {'data-hook': 'average-star-rating'})
+TOTAL_REVIEWS_FINDATTRS = FindAttrs(
+    'span', {'class': 'a-size-medium totalReviewCount',
+             'data-hook': 'total-review-count'})
 
 # ReviewInfoの範囲を絞るための用意
 REVIEW_INFO_DIV_FINDATTRS = FindAttrs('div', {'data-hook': 'review'})
 
 # ReviewInfoを埋めるためのパラメータ
-DATE_FINDATTRS   = FindAttrs('span', {'class': 'a-size-base a-color-secondary review-date',
-                                      'data-hook': 'review-date'})
+DATE_FINDATTRS   = FindAttrs(
+    'span', {'class': 'a-size-base a-color-secondary review-date',
+             'data-hook': 'review-date'})
 STAR_FINDATTRS   = FindAttrs('i',    {'data-hook': 'review-star-rating'})
-VOTE_FINDATTRS   = FindAttrs('span', {'class': 'a-size-base a-color-tertiary cr-vote-text',
-                                      'data-hook': 'helpful-vote-statement'})
+VOTE_FINDATTRS   = FindAttrs(
+    'span', {'class': 'a-size-base a-color-tertiary cr-vote-text',
+             'data-hook': 'helpful-vote-statement'})
 NAME_FINDATTRS   = FindAttrs('span', {'class': 'a-profile-name'})
 TITLE_FINDATTRS  = FindAttrs('a',    {'data-hook': 'review-title'})
 REVIEW_FINDATTRS = FindAttrs('span', {'data-hook': 'review-body'})
@@ -44,69 +49,73 @@ REVIEW_FINDATTRS = FindAttrs('span', {'data-hook': 'review-body'})
 DATE_REGEX = re.compile(r'(?P<year>[0-9]*)年(?P<month>[0-9]*)月(?P<day>[0-9]*)日')
 
 class ReviewInfoExtractor:
+  """レビューページから分析に必要な情報を取り出す
 
-  def __init__(self, code='utf-8', parser='lxml'):
-    self.code   = code
+  Attributes:
+    parser (str): html のパーサ
+    all_info (List[ReviewInfo]): レビューに関する情報一覧
+    review_page_json (ReviewPageJSON): レビュー情報を格納するためのインスタンス
+  """
+
+  def __init__(self, parser: str = 'lxml'):
     self.parser = parser
 
-  def extract_all_info(self, html_list: list):
+  def __call__(self, html_list: Iterable[str]) -> NoReturn:
+    """extract_all_info の呼び出し
+
+    Args:
+      html_list (Iterable[str]): 商品のhtmlファイルリスト
+    """
+    self.extract_all_info(html_list)
+
+  def extract_all_info(self, html_list: Iterable[str]) -> NoReturn:
     """商品レビューで重要だと思われる情報をすべて抽出する
 
-        Params:
-            html_list: list
-                商品のhtmlファイルリスト
+    Args:
+      html_list (Iterable[str]): 商品のhtmlファイルリスト
     """
     self._initialize_data()
 
     first_html = html_list[0]
-    self.review_page_json.category = self._decide_category(first_html)
+    self.review_page_json.category = _decide_category(first_html)
     self._extract_landmarks(first_html)
     self.all_info = [ri for h in html_list
                      for ri in self._extract_review_info_list(h)]
 
       
-  def save_json(self, out_name: str, product: str):
+  def save_json(self, out_name: Union[str, pathlib.Path], 
+                product: str) -> NoReturn:
     """抽出した情報をjsonファイルに保存
 
-    Params:
-      out_name: str
-        出力するjsonファイルの名前
-
-      product: str
-        商品名
+    Args:
+      out_name (Union[str, pathlib.Path]): 出力するjsonファイルの名前
+      product (str): 商品名
     """
-    self.review_page_json.product            = product
-    self.review_page_json.real_reviews       = len(self.all_info)
+    self.review_page_json.product = product
+    self.review_page_json.real_reviews = len(self.all_info)
     self.review_page_json.stars_distribution = self.stars_distibution_dict
-    self.review_page_json.reviews            = self.all_info
-
+    self.review_page_json.reviews = self.all_info
     self.review_page_json.dump(out_name)
 
   
-  def _initialize_data(self):
-    self.category         = None
-    self.review_landmarks = None
-    self.all_info         = None
-
+  def _initialize_data(self) -> NoReturn:
+    """抽出するための準備のため、データを初期化する"""
+    self.category = None
+    self.all_info = None
     self.review_page_json = ReviewPageJSON()
-
-    star_list = np.arange(1, 5+1).astype(float)
+    star_list = np.arange(1, 5 + 1).astype(float)
     self.stars_distibution_dict = OrderedDict()
     for s in star_list:
       self.stars_distibution_dict[s] = 0
 
+  def _extract_landmarks(self, html: Union[str, pathlib.Path]) -> NoReturn:
+    """商品に関する情報(URL や 評価)を抽出
 
-  def _decide_category(self, html_path):
-    html_path    = pathlib.Path(html_path).resolve()
-    product_dir  = html_path.parent
-    categoty_dir = product_dir.parent
-    category     = categoty_dir.name
-    return category
-
-
-  def _extract_landmarks(self, html):
-    bs = BeautifulSoup(pathlib.Path(html).open(mode='r', encoding=self.code),
-                        self.parser)
+    Args:
+      html (Union[str, pathlib.Path]): html ファイルのパス
+    """
+    bs = BeautifulSoup(pathlib.Path(html).open(mode='r', encoding='utf-8'),
+                       self.parser)
 
     link = bs.find(LINK_FINDATTRS.name, LINK_FINDATTRS.attrs)['href']
     landmarks_div = bs.find(PRODUCT_DIV_FINDATTRS.name,
@@ -118,15 +127,24 @@ class ReviewInfoExtractor:
     total_reviews = landmarks_div.find(TOTAL_REVIEWS_FINDATTRS.name,
                                        TOTAL_REVIEWS_FINDATTRS.attrs)
 
-    average_star = self._extract_stars(average_star)
+    average_star = _extract_stars(average_star)
     total_reviews = int(total_reviews.text.strip().replace(',', ''))
-    self.review_page_json.link          = link
-    self.review_page_json.maker         = maker
+    self.review_page_json.link = link
+    self.review_page_json.maker = maker
     self.review_page_json.average_stars = average_star
     self.review_page_json.total_reviews = total_reviews
 
-  def _extract_review_info_list(self, html) -> list:
-    bs = BeautifulSoup(pathlib.Path(html).open(mode='r', encoding=self.code),
+  def _extract_review_info_list(self, 
+      html: Union[str, pathlib.Path]) -> List[ReviewInfo]:
+    """与えられた html ファイルに記述されているレビュー情報を抽出する
+
+    Args:
+      html (Union[str, pathlib.Path]): html ファイルのパス
+
+    Returns:
+      レビュー情報の一覧
+    """
+    bs = BeautifulSoup(pathlib.Path(html).open(mode='r', encoding='utf-8'),
                        self.parser)
 
     review_div_list = bs.findAll(REVIEW_INFO_DIV_FINDATTRS.name,
@@ -135,23 +153,30 @@ class ReviewInfoExtractor:
     return [self._get_review_info(rv) for rv in review_div_list]
 
 
-  def _get_review_info(self, review_div) -> ReviewInfo:
+  def _get_review_info(self, review_div: bs4.element.Tag) -> ReviewInfo:
+    """レビューに関する情報を抽出する
+
+    Args:
+      review_div (bs4.element.Tag): html に書かれている1つのレビュー区画
+
+    Returns:
+      ReviewInfoインスタンス
+    """
     date = ''
     star = 0
     vote = 0
     name = ''
     title = ''
     review = ''
-
     try:
       date_text = review_div.find(DATE_FINDATTRS.name, 
                                   DATE_FINDATTRS.attrs).text.strip()
       star_text = review_div.find(STAR_FINDATTRS.name,
                                   STAR_FINDATTRS.attrs).text.strip()
       vote_text = review_div.find(VOTE_FINDATTRS.name, VOTE_FINDATTRS.attrs)
-      date   = self._extract_date(date_text)
-      star   = self._extract_stars(star_text)
-      vote   = self._extract_vote(vote_text)
+      date   = _extract_date(date_text)
+      star   = _extract_stars(star_text)
+      vote   = _extract_vote(vote_text)
       name   = review_div.find(NAME_FINDATTRS.name,
                                NAME_FINDATTRS.attrs).text.strip()
       title  = review_div.find(TITLE_FINDATTRS.name, 
@@ -167,28 +192,66 @@ class ReviewInfoExtractor:
     return ReviewInfo(date, int(star), vote, name, title, review)
 
 
-  def _extract_date(self, content) -> str:
-    date_text = DATE_REGEX.match(content)
-    date = '{}/{}/{}'.format(date_text.group('year'),
-                             date_text.group('month').zfill(2),
-                             date_text.group('day').zfill(2))
-    return date
+## ヘルパー関数群
+def _decide_category(html_path: Union[str, pathlib.Path]) -> str:
+  """商品カテゴリを html ファイルのパスから取得する
 
-  
-  def _extract_stars(self, content) -> float:
-    stars = float(content.replace('5つ星のうち', ''))
-    return stars
+  Args:
+    html_path (Union[str, pathlib.Path]): html ファイルのパス
 
-  
-  def _extract_vote(self, content) -> int:
-    vote = 0
-    if content:
-      vote_text = content.text.strip()
-      vote = int(vote_text.replace('人のお客様がこれが役に立ったと考えています', ''))
+  Returns:
+    商品カテゴリ
+  """
+  html_path = pathlib.Path(html_path).resolve()
+  product_dir = html_path.parent
+  categoty_dir = product_dir.parent
+  category = categoty_dir.name
+  return category      
 
-    return vote
+def _extract_date(content: str) -> str:
+  """日付情報を取得
 
-        
+  Args:
+    content (str): html から取得した日付が書かれているテキスト
+
+  Returns:
+    YYYY/mm/DD 形式で日付を返す
+  """
+  date_text = DATE_REGEX.match(content)
+  date = '{}/{}/{}'.format(date_text.group('year'),
+                           date_text.group('month').zfill(2),
+                           date_text.group('day').zfill(2))
+  return date
+
+STARS_INFO_DUST = '5つ星のうち'
+def _extract_stars(content: str) -> float:
+  """評価を取得
+
+  Args:
+    content (str): html から取得した評価が書かれているテキスト
+
+  Returns:
+    ☆評価
+  """
+  stars = float(content.replace(STARS_INFO_DUST, ''))
+  return stars
+
+VOTE_INFO_DUST = '人のお客様がこれが役に立ったと考えています'
+def _extract_vote(content: str) -> int:
+  """投票数を取得
+
+  Args:
+    content (str): html から取得した投票数が書かれているテキスト
+
+  Returns:
+    投票数(投票数が無ければ 0 を返す)
+  """
+  vote = 0
+  if content:
+    vote_text = content.text.strip()
+    vote = int(vote_text.replace(VOTE_INFO_DUST, ''))
+
+  return vote
 
 
 def main(args):
