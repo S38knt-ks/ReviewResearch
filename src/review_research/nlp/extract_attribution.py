@@ -19,6 +19,7 @@ from ..nlp import AttrExtractionInfo
 from ..nlp import COMMON_DICTIONARY_NAME
 from ..nlp import StopwordRemover
 from ..nlp import AttrDictHandler
+from ..misc import unique_sort_by_index
 
 class DependencyAnalysisResult(NamedTuple):
   """DependencyAnalyzerの解析結果を格納するクラス
@@ -140,9 +141,9 @@ class AttributionExtractor:
               hit_terms.append(term)
               attrs.append(attr)
 
-      attrs = frozenset(_unique_sort_by_index(attrs))
-      candidate_terms = frozenset(_unique_sort_by_index(candidate_term_list))
-      hit_terms = frozenset(_unique_sort_by_index(hit_terms))
+      attrs = frozenset(unique_sort_by_index(attrs))
+      candidate_terms = frozenset(unique_sort_by_index(candidate_term_list))
+      hit_terms = frozenset(unique_sort_by_index(hit_terms))
       phrases = frozenset(linkdetail.phrase_detail.head_surface 
                           for linkdetail in linkdetails)
       result_list.append(AttrExtractionResult(
@@ -159,7 +160,7 @@ class AttributionExtractor:
     for attr in self.attrdict:
       if attr in temp_dict:
         info_list = temp_dict[attr]
-        info_set = _unique_sort_by_index(info_list)
+        info_set = unique_sort_by_index(info_list)
         result_dict[attr] = tuple(OrderedDict(info._asdict()) 
                                   for info in info_set)
 
@@ -309,14 +310,3 @@ def _convert_link_to_flagment(
     つながった文節
   """
   return ''.join(chunk_dict[link].phrase for link in link_list)
-  
-def _unique_sort_by_index(iterable: Iterable[Any]) -> Iterable[Any]:
-  """重複をなくして出現順にソートする
-
-  Args:
-    iterable (Iterable[Any]): 複数の要素をもつオブジェクト
-
-  Returns:
-    与えられたiterableから重複をなくして出現順にソートしたもののリスト
-  """
-  yield from sorted(set(iterable), key=iterable.index)
