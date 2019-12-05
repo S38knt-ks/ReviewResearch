@@ -9,11 +9,12 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from .nlp import Tokenizer
-from .nlp import ALL_POS
-from .nlp import DependencyAnalyzer
-from .analysis import CorrPlotter, convert_nan_to_num
-from .analysis import Review2Variable
+from review_research.nlp import Tokenizer
+from review_research.nlp import ALL_POS
+from review_research.nlp import DependencyAnalyzer
+from review_research.analysis import CorrPlotter
+from review_research.analysis import convert_nan_to_num
+from review_research.analysis import Review2Variable
 
 FLAGS = tuple([True, False])
 TEXT_LENGTH_ARGS = list(dict(ignore_space=ignore_space) 
@@ -22,7 +23,9 @@ TEXT_LENGTH_ARGS = list(dict(ignore_space=ignore_space)
 COMB_POS = list(pos for pos_num in range(1, len(ALL_POS))
                 for pos in combinations(ALL_POS, pos_num))
 
-REVIEW2VARIABLE_ATTRIBUTES = [name for name, _ in is_unique_attr(Review2Variable)]
+REVIEW2VARIABLE_ATTRIBUTES = [
+    name for name, _ in is_unique_attr(Review2Variable)
+]
 
 def is_unique_attr(obj):
   return isinstance(obj, property) or inspect.isfunction(obj)

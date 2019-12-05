@@ -7,19 +7,21 @@ from collections import OrderedDict, namedtuple
 
 from tqdm import tqdm
 
-from .nlp import Splitter
-from .nlp import COMMON_DICTIONARY_NAME
-from .nlp import AttrDictHandler
-from .review import ReviewPageJSON
-from .evaluation import AttrAnnotation
-from .evaluation import TextWithAttrAnnotation
-from .evaluation import AttrEvaluationData
+from review_research.nlp import Splitter
+from review_research.nlp import COMMON_DICTIONARY_NAME
+from review_research.nlp import AttrDictHandler
+from review_research.review import ReviewPageJSON
+from review_research.evaluation import AttrAnnotation
+from review_research.evaluation import TextWithAttrAnnotation
+from review_research.evaluation import AttrEvaluationData
+from review_research.misc import get_all_jsonfiles
 
 def set_classes(dic_dir: str, category: str):
   dict_handler = AttrDictHandler(dic_dir)
   attr_dict = OrderedDict()
   common_attr_en_name = [*dict_handler.common_en2ja][0]
-  attr_dict[common_attr_en_name] = dict_handler.common_en2ja[common_attr_en_name]
+  common_attr_ja_name = dict_handler.common_en2ja[common_attr_en_name]
+  attr_dict[common_attr_en_name] = common_attr_ja_name
   for attr_en_name, attr_ja_name in dict_handler.en2ja(category).items():
     attr_dict[attr_en_name] = attr_ja_name
 
@@ -27,13 +29,7 @@ def set_classes(dic_dir: str, category: str):
 
 def main(args):
   data_dir = pathlib.Path(args.data_dir)
-  all_paths = tuple(
-      pathlib.Path(f) 
-      for f in glob.glob('{}\\**'.format(data_dir), recursive=True)
-  )
-  json_filepaths = tuple(p for p in all_paths
-                         if p.is_file() and p.name == 'review.json')
-
+  json_filepaths = get_all_jsonfiles(data_dir, 'review.json')
   splitter = Splitter()
   dic_dir = args.dic_dir
   for json_file in tqdm(json_filepaths, ascii=True):
@@ -66,7 +62,8 @@ def main(args):
       all_text_list.extend(sentence_list)
   
     total_text = len(all_text_list)
-    evaluation_data = AttrEvaluationData(category, product_name, total_review, total_text, all_text_list)
+    evaluation_data = AttrEvaluationData(
+        category, product_name, total_review, total_text, all_text_list)
 
     out_file = product_dir / 'eval.json'
     evaluation_data.dump(out_file)

@@ -13,6 +13,7 @@
 import argparse
 import json
 import os
+import pathlib
 import glob
 from pprint import pprint
 from collections import OrderedDict
@@ -20,7 +21,9 @@ from collections import OrderedDict
 import pandas
 from tqdm import tqdm
 
-from .review import ReviewPageJSON, ReviewInfo
+from review_research.review import ReviewInfo
+from review_research.review import ReviewPageJSON
+from review_research.misc import get_all_jsonfiles
 
 
 EDGE = 'edge'
@@ -37,35 +40,31 @@ def divide_df(df, key):
   
   return df_dict
 
-
-def save_data(json_data, sample_df, extract, file_name):
+def save_data(json_data: ReviewPageJSON, sample_df: pandas.DataFrame, 
+              extract: int, jsonpath: pathlib.Path):
   json_data.reviews = [ReviewInfo(*s) for s in sample_df.values.tolist()]
-  out_file = file_name.replace('.json', '_{}_{}.json'.format(extract, len(sample_df)))
+  out_filename = '_{}_{}.json'.format(extract, len(sample_df))
+  out_file = str(jsonpath).replace('.json', out_filename)
   json_data.dump(out_file)
-
 
 def main(args):
   input_dir = args.input_dir
   amount = args.amount
   extract = args.extract
 
-  for f in tqdm((jf for jf in glob.glob('{}\\**'.format(input_dir), recursive=True) if jf.endswith('review.json')), ascii=True):
-    data = ReviewPageJSON.load(f)
+  for jsonfile in tqdm(get_all_jsonfiles(input_dir), ascii=True):
+    data = ReviewPageJSON.load(jsonfile)
     total_reviews = data.total_reviews
     if total_reviews <= amount:
       continue
 
     total_reviews = float(total_reviews)
-
     review_df = pandas.DataFrame(data.reviews)
     cols = review_df.columns.values.tolist()
     star_key = cols[1]
 
     if extract == DISTRIBUTION:
       df_dict = divide_df(review_df, star_key)
-      # pprint(df_dict)
-      # print()
-
       vote_key = cols[2]
       sample_df_list = []
       for df in df_dict.values():
@@ -75,25 +74,23 @@ def main(args):
 
         else:
           sample_amount = int(len(df) * amount / total_reviews) + 1
-          # if sample_amount == len(df) and sample_amount != 1:
-          #     sample_amount -= 1
           if sample_amount >= len(df):
             dif = sample_amount - len(df)
             sample_amount -= dif
 
-        sample_df = df.sort_values(vote_key, ascending=False).head(sample_amount)
-        sample_df_list.append(sample_df)
+        sample_df = df.sort_values(vote_key, ascending=False)
+        sample_df_list.append(sample_df.head(sample_amount))
 
       sample_df = pandas.concat(sample_df_list)
-      save_data(data, sample_df, extract, f)        
+      save_data(data, sample_df, extract, jsonfile)        
 
     else:
       sorted_df = review_df.sort_values(star_key, ascending=False)
-      half = int(amount/2)
+      half = amount // 2
       head_df = sorted_df.head(half)
       tail_df = sorted_df.tail(amount - half)
       sample_df = pandas.concat([head_df, tail_df])
-      save_data(data, sample_df, extract, f)           
+      save_data(data, sample_df, extract, jsonfile)           
 
 
 if __name__ == "__main__":

@@ -11,12 +11,12 @@ import seaborn
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .evaluation import ReviewTextInfo
-from .nlp import AttributionExtractor
-from .evaluation import AttrPredictionResult
-from .review import StarsDistribution
-from .misc import unique_sort_by_index
-from .misc import get_all_jsonfiles
+from review_research.evaluation import ReviewTextInfo
+from review_research.nlp import AttributionExtractor
+from review_research.evaluation import AttrPredictionResult
+from review_research.review import StarsDistribution
+from review_research.misc import unique_sort_by_index
+from review_research.misc import get_all_jsonfiles
 
 OTHER_EN_ATTR = 'other'
 OTHER_JA_ATTR = 'その他'

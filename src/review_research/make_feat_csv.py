@@ -8,7 +8,7 @@ from collections import OrderedDict, namedtuple
 
 import pandas
 
-from .review import ReviewPageJSON
+from review_research.review import ReviewPageJSON
 
 FEATURE_HEADER = ('index',
                   'vote',

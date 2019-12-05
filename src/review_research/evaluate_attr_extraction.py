@@ -6,13 +6,11 @@ import pathlib
 from collections import OrderedDict, namedtuple
 from pprint import pprint
 
-from .evaluation import AttrExtractionEvaluater
+from review_research.evaluation import AttrExtractionEvaluater
+from review_research.misc import get_all_jsonfiles
+from review_research.misc import unique_sort_by_index
 
 def main(args):
-  input_dir = args.input_dir
-  all_files = glob.glob('{}\\**'.format(input_dir), recursive=True)
-  json_file_list = [os.path.abspath(f) for f in all_files 
-                    if os.path.isfile(f) and f.endswith('.json')]
 
   def is_target(path: str ,pattern: str):
     return os.path.basename(path) == pattern
@@ -30,13 +28,15 @@ def main(args):
       'normal': PatternPair('prediction.json', 'result.json')
   }
 
-  product_dir_list = [os.path.dirname(f) for f in json_file_list]
-  product_dir_list = sorted(set(product_dir_list), key=product_dir_list.index)
+  input_dir = args.input_dir
+  jsonfile_list = get_all_jsonfiles(input_dir)
+  product_dir_list = unique_sort_by_index([p.parent for p in jsonfile_list])
+  product_dir_list = list(product_dir_list)
   product_file_dict = {product_dir: [] for product_dir in product_dir_list}
-  for json_file in json_file_list:
+  for jsonfile in jsonfile_list:
     for product_dir in product_dir_list:
-      if json_file.startswith(product_dir):
-        product_file_dict[product_dir].append(json_file)
+      if jsonfile.parent == product_dir:
+        product_file_dict[product_dir].append(jsonfile)
 
   # 入出力ファイルの対応付け
   io_file_dict = OrderedDict()

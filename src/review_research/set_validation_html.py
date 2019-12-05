@@ -3,13 +3,24 @@ import os
 import glob
 import re
 import random
+import pathlib
 from collections import OrderedDict, namedtuple
 from pprint import pprint
+from typing import Tuple, Dict, NamedTuple
 
 import pandas
 
-HTML_CSV_FIELD = ['detail', 'sample']
-HtmlCSV = namedtuple('HtmlCSV', HTML_CSV_FIELD)
+from review_research.misc import unique_sort_by_index
+
+class HtmlCSV(NamedTuple):
+  """商品レビューページの html 一覧が記述されている csv ファイルをまとめるクラス
+
+  Attributes:
+    detail (pathlib.Path): 全商品レビューページ一覧が記述されている csv ファイル
+    sample (pathlib.Path): 開発セット用の商品レビューページが記述されている csv ファイル
+  """
+  detail: pathlib.Path
+  sample: pathlib.Path
 
 CSV_DATA_FIELD = ['reviews', 'stars', 'link']
 CSVData = namedtuple('CSVData', CSV_DATA_FIELD)
@@ -24,19 +35,20 @@ CLASS_DATA_QUERY = {
   CLASS_DATA_KEYS.class_3: 'stars <= 2.0'
 }
 
-def group_by_category(file_list) -> OrderedDict:
+def group_by_category(
+    csvfiles: Tuple[pathlib.Path, ...]) -> Dict[str, HtmlCSV]:
   category_list = []
   detail_dict = OrderedDict()
   sample_dict = OrderedDict()
-  for csv_file in file_list:
-    category_dir, csv_name = os.path.split(csv_file)
-    _, category = os.path.split(category_dir)
+  for csvfile in csvfiles:
+    csv_name = csvfile.name
+    category = csvfile.parent.name
 
     if csv_name.endswith('detail.csv'):
-      detail_dict[category] = csv_file
+      detail_dict[category] = csvfile
 
     elif csv_name == 'sample.csv':
-      sample_dict[category] = csv_file
+      sample_dict[category] = csvfile
 
     else:
       continue
@@ -45,8 +57,7 @@ def group_by_category(file_list) -> OrderedDict:
       category_list.append(category)
   
   csv_dict = OrderedDict()
-  category_list = sorted(list(set(category_list)))
-  pprint(category_list)
+  category_list = list(unique_sort_by_index(category_list))
   for category in category_list:
     detail = detail_dict[category]
     sample = sample_dict[category]
@@ -54,73 +65,75 @@ def group_by_category(file_list) -> OrderedDict:
 
   return csv_dict
 
-
-def read_csv(csv_file):
+def read_csv(csvfile: pathlib.Path):
   sep_pat = re.compile(r',\s?')
-  with open(csv_file, mode='r', encoding='utf-8') as fp:
-    contents = [CSVData(*sep_pat.split(line.strip())) for line in fp.readlines()]
+  with csvfile.open(mode='r', encoding='utf-8') as fp:
+    contents = [CSVData(*sep_pat.split(line.strip())) for line in fp]
 
   header, data = contents[0], contents[1:]
   return header, data
 
-
-def create_candidate_validation(csv_dict: OrderedDict) -> OrderedDict:
+def create_candidate_validation(
+    csv_dict: Dict[str, HtmlCSV]) -> Dict[str, pandas.DataFrame]:
   df_dict = OrderedDict()
   for category, (detail, sample) in csv_dict.items():
     header, detail_data = read_csv(detail)
-    _, sample_data      = read_csv(sample)
+    _, sample_data = read_csv(sample)
     type_dict = {header.reviews: int,
-                 header.stars:   float}
+                 header.stars: float}
 
-    candidate_validation_list = list(set(detail_data) - set(sample_data))
-    candidate_validation_df   = pandas.DataFrame(candidate_validation_list, columns=CSV_DATA_FIELD)
-    candidate_validation_df   = candidate_validation_df.astype(type_dict)
-
-    df_dict[category] = candidate_validation_df.sort_values(header.stars, ascending=False).query('reviews >= 20')
+    candidate_valid_list = list(set(detail_data) - set(sample_data))
+    candidate_valid_df = pandas.DataFrame(candidate_valid_list,
+                                               columns=CSV_DATA_FIELD)
+    candidate_valid_df = candidate_valid_df.astype(type_dict)
+    sorted_valid_df = candidate_valid_df.sort_values(header.stars, 
+                                                     ascending=False)
+    df_dict[category] = sorted_valid_df.query('reviews >= 20')
 
   return df_dict
-
 
 def divide_by_class(csv_df: pandas.DataFrame):
   df_dict = OrderedDict()
-  for key, query in CLASS_DATA_QUERY.items():
-    df_dict[key] = csv_df.query(query).sort_values('stars', ascending=False)
+  for class_num, query in CLASS_DATA_QUERY.items():
+    applied_df = csv_df.query(query)
+    df_dict[class_num] = applied_df.sort_values('stars', ascending=False)
 
   return df_dict
 
-
 def main(args):
   input_dir = args.input_dir
-  all_csv_file_list = [
-      os.path.abspath(f) for f in glob.glob('{}/**'.format(input_dir), recursive=True)
-      if os.path.isfile(f)
-  ]
+  all_paths = tuple(
+      pathlib.Path(f) 
+      for f in glob.glob('{}/**'.format(input_dir), recursive=True))
+  all_csvfiles = tuple(p for p in all_paths if p.suffix == '.csv')
 
-  csv_dict = group_by_category(all_csv_file_list)
+  csv_dict = group_by_category(all_csvfiles)
   candidate_val_dict = create_candidate_validation(csv_dict)
 
-  out_dir = args.out_dir
+  outdir = pathlib.Path(args.outdir)
   header_line = '{}\n'.format(','.join(CSV_DATA_FIELD))
   for category, df in candidate_val_dict.items():
-    category_dir = '{}/{}'.format(out_dir, category)
-    if not os.path.exists(category_dir):
-      os.makedirs(category_dir)
+    category_dir = outdir / category
+    if not category_dir.exists():
+      category_dir.mkdir(parents=True)
 
     validation_list = []
     df_by_class = divide_by_class(df)
-    for key, data in df_by_class.items():
+    for class_num, data in df_by_class.items():
       if len(data) == 0:
         continue
 
-      validation_list.append(random.choice(data.query('reviews < 40').values.tolist()))
-      out_name = '{}/{}.csv'.format(category_dir, key)
-      with open(out_name, mode='w', encoding='utf-8') as fp:
+      html_list = data.query('reviews < 40').values.tolist()
+      html_for_valid = random.choice(html_list)
+      validation_list.append(html_for_valid)
+      outfile = category_dir / '{}.csv'.format(class_num)
+      with outfile.open(mode='w', encoding='utf-8') as fp:
         fp.write(header_line)
         for content in data.values.tolist():
           fp.write('{}\n'.format(','.join(str(c) for c in content)))
 
-    out_name = '{}/validation.csv'.format(category_dir)
-    with open(out_name, mode='w', encoding='utf-8') as fp:
+    out_name = category_dir / 'validation.csv'
+    with out_name.open(mode='w', encoding='utf-8') as fp:
       fp.write(header_line)
       for content in validation_list:
         fp.write('{}\n'.format(','.join(str(c) for c in content)))
@@ -129,5 +142,5 @@ def main(args):
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument('input_dir')
-  parser.add_argument('out_dir')
+  parser.add_argument('outdir')
   main(parser.parse_args())

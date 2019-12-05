@@ -7,12 +7,12 @@ from collections import namedtuple, OrderedDict
 
 from tqdm import tqdm
 
-from .nlp import Splitter
-from .nlp import normalize
-from .nlp import AttributionExtractor
-from .evaluation import ReviewTextInfo
-from .evaluation import AttrPredictionResult
-from .review import ReviewPageJSON
+from review_research.nlp import Splitter
+from review_research.nlp import normalize
+from review_research.nlp import AttributionExtractor
+from review_research.evaluation import ReviewTextInfo
+from review_research.evaluation import AttrPredictionResult
+from review_research.review import ReviewPageJSON
 
 def main(args):
   splitter = Splitter()
@@ -69,8 +69,8 @@ def main(args):
           sentence_id = sidx + 1
           result_dict = extractor.extract_attribution(sentence)
           editted_dict = OrderedDict()
-          for attr, flagment in result_dict.items():
-            editted_dict[extractor.ja2en[attr]] = flagment
+          for attr, results in result_dict.items():
+            editted_dict[extractor.ja2en[attr]] = results
 
           review_text_info_list.append(
               ReviewTextInfo(review_id, last_review_id,

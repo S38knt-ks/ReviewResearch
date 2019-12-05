@@ -10,8 +10,8 @@ from pprint import pprint
 import pandas
 from tqdm import tqdm
 
-from .htmlgenerator import ReviewDataConvertor
-from .misc import get_all_jsonfiles
+from review_research.htmlgenerator import ReviewDataConvertor
+from review_research.misc import get_all_jsonfiles
 
 def main(args):
   input_dir = args.input_dir
