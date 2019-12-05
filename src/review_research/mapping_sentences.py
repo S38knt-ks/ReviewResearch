@@ -4,13 +4,19 @@ import os
 import pathlib
 from collections import OrderedDict, namedtuple, defaultdict
 from pprint import pprint
+from typing import NamedTuple, Tuple, Dict, List, Set, Union, NoReturn
 
 import pandas
 import seaborn
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .nlp import AttributionExtractor, WORD_SEPARATOR
+from .evaluation import ReviewTextInfo
+from .nlp import AttributionExtractor
+from .evaluation import AttrPredictionResult
+from .review import StarsDistribution
+from .misc import unique_sort_by_index
+from .misc import get_all_jsonfiles
 
 OTHER_EN_ATTR = 'other'
 OTHER_JA_ATTR = 'その他'
@@ -28,17 +34,103 @@ SENTENCE_TEMP_INFO_FIELD = ['review',
                             'cooccurrence_words',
                             'phrases',
                             'phrase_link_num',
-                            'link_length']
+                            'link_length',]
 SentenceTempInfo = namedtuple('SentenceTempInfo', SENTENCE_TEMP_INFO_FIELD)
 
 SENTENCE_INFO_FIELD = [*SENTENCE_TEMP_INFO_FIELD, 'score', 'score_detail']
 SentenceInfo = namedtuple('SentenceInfo', SENTENCE_INFO_FIELD)
 
-class SentenceMapper:
+class ReviewTextInfoForMapping(NamedTuple):
+  """対応付けのためのクラス
 
-  def __init__(self, dic_dir: str, code='utf-8'):
-    self._code = code
+  Attributes:
+    review (str): レビュー本文
+    text (str): 対象の文
+    candidate_terms (Union[str, Set[str]]): 属性候補語一覧
+    hit_terms (Union[str, Set[str]]): 属性語として抽出された語一覧
+    phrases (Union[str, Set[str]]): 文節一覧
+    num_attributions (int): 文中の属性数
+    link_length (int): 係り受け関係中の文節数
+    score (int): 文の有用度(仮)
+  """
+  review: str
+  text: str
+  candidate_terms: Union[str, Set[str]]
+  hit_terms: Union[str, Set[str]]
+  phrases: Union[str, Set[str]]
+  num_attributions: int
+  link_length: int
+  score: int
+
+class MappingResult(NamedTuple):
+  """レビュー文中の文を属性と星評価に対応付けさせた結果
+
+  Attributes:
+    category (str): 商品カテゴリ
+    product (str): 商品名
+    link (str): レビューページへの URL
+    maker (str): 製造企業
+    average_stars (float): 平均評価
+    stars_distribution (StarsDistribution): 星評価分布
+    total_review (int): レビュー数
+    total_text (int): 総文数
+    mapping (Dict[str, Dict[str, Tuple[ReviewTextInfoForMapping, ...]]]): 対応付け
+  """
+  category: str
+  product: str
+  link: str
+  maker: str
+  average_stars: float
+  stars_distribution: StarsDistribution
+  total_review: int
+  total_text: int
+  mapping: Dict[str, Dict[str, Tuple[ReviewTextInfoForMapping, ...]]]
+
+  @classmethod
+  def load(cls, jsonpath: Union[str, pathlib.Path]):
+    jsonpath = pathlib.Path(jsonpath)
+    data = json.load(jsonpath.open('r', encoding='utf-8'),
+                     object_pairs_hook=OrderedDict)
+    this = cls(**data)
+    mapping = OrderedDict()
+    for attr, star_to_text_list in this.mapping.items():
+      star_map = OrderedDict()
+      for star, text_list in star_to_text_list.items():
+        texts = tuple(ReviewTextInfoForMapping(**text) for text in text_list)
+        star_map[star] = texts
+
+      mapping[attr] = star_map
+
+    return this._replace(mapping=mapping)
+
+  def dump(self, filepath: Union[str, pathlib.Path]) -> NoReturn:
+    """JSON ファイルに保存する
+
+    Args:
+      filepath (Union[str, pathlib.Path]): 出力先ファイル名
+    """
+    filepath = pathlib.Path(filepath)
+    this = MappingResult._make(self)
+    mapping = OrderedDict()
+    for attr, star_to_text_list in self.mapping.items():
+      star_map = OrderedDict()
+      for star, text_list in star_to_text_list.items():
+        texts = tuple(text._asdict() for text in text_list)
+        star_map[star] = texts
+
+      mapping[attr] = star_map
+
+    this = this._replace(mapping=mapping)
+    json.dump(this, filepath.open('w', encoding='utf-8'),
+              ensure_ascii=False, indent=4)
+
+
+class SentenceMapper:
+  """レビュー文中の文を属性と星評価別に対応付ける"""
+
+  def __init__(self, dic_dir: Union[str, pathlib.Path], category: str):
     self._extractor = AttributionExtractor(dic_dir)
+    self.category = category
 
   @property
   def category(self):
@@ -69,130 +161,92 @@ class SentenceMapper:
   def ja2en(self) -> dict:
     return self._ja2en
 
-  @property
-  def code(self) -> str:
-    return self._code
+  def create_map(self, pred_jsonpath: Union[str, pathlib.Path]) -> MappingResult:
+    """属性抽出の結果からレビュー文中の文を属性と星評価で対応付ける
 
-  def create_map(self, pred_json: str) -> OrderedDict:
-    pred_data = self._read_prediction_json(pred_json)
-    sentences = pred_data['sentences']
+    Args:
+      pred_jsonpath (Union[str, pathlib.Path]): 属性抽出の結果を格納した JSON ファイル
 
-    attr_map = OrderedDict()
-    co_occurrence_dict = OrderedDict()
-    for attr in self.en2ja:
-      attr_map[attr] = self._make_star_dict()
-      co_occurrence_dict[attr] = defaultdict(int)
-
-    attr_map[OTHER_EN_ATTR] = self._make_star_dict()    
-    for sentence_prop in sentences:
-      star = sentence_prop['star']
-      star_str = STAR_CORRESPONDENCE_DICT[star]
-
-      review   = sentence_prop['review']
-      sentence = sentence_prop['sentence']
-
-      result_dict = sentence_prop['result']
-      if result_dict:
-        for attr, extraction_detail_list in result_dict.items():                    
-          cooccurrence_words = []
-          phrases = []
-          candidate_terms = []
-          hit_terms = []
-          for ed in extraction_detail_list:
-            # cooccurrence_words.extend(ed['cooccurrence_words'].split(AttributionExtractor.WORD_SEPARATOR))
-            _phrases = ed['phrases'].split(WORD_SEPARATOR)
-            phrases.extend(_phrases)
-            candidate_terms.extend(ed['candidate_terms'].split(WORD_SEPARATOR))
-            cooccurrence_words.extend(
-                [w for w in ed['cooccurrence_words'].split(WORD_SEPARATOR)
-                  if not self._extractor._analyzer._a_hiragana_pat.match(w)]
-            )
-            hit_terms.extend(ed['hit_terms'].split(WORD_SEPARATOR))
-
-          cooccurrence_words = sorted(set(cooccurrence_words), key=cooccurrence_words.index)
-          candidate_terms = sorted(set(candidate_terms), key=candidate_terms.index)
-          hit_terms = sorted(set(hit_terms), key=hit_terms.index)
-          link_length = len(sorted(set(phrases), key=phrases.index))
-          for word in cooccurrence_words:
-            co_occurrence_dict[attr][word] += 1
-
-          cooccurrence_word = WORD_SEPARATOR.join(cooccurrence_words) if len(cooccurrence_words) > 0 else ''
-          candidate_terms = WORD_SEPARATOR.join(candidate_terms)
-          hit_terms = WORD_SEPARATOR.join(hit_terms)
-          
-          phrases = WORD_SEPARATOR.join(phrases)
-          sentence_info = SentenceTempInfo(review, sentence, candidate_terms, hit_terms,  cooccurrence_word, phrases, len(extraction_detail_list), link_length)                  
-          attr_map[attr][star_str].append(sentence_info)
-
-      else:
-        sentence_info = SentenceInfo(review, sentence, '', '', '', '', 1, 0, 0, '')
-        attr_map[OTHER_EN_ATTR][star_str].append(sentence_info)
-
-    scored_attr_map = OrderedDict()
-    for attr, star_dict in attr_map.items():
-      if attr != OTHER_EN_ATTR:
-        scored_attr_map[attr] = self._make_star_dict()
-        for star_str, sentence_temp_info_list in star_dict.items():
-          sentence_info_list = []
-          for sentence_temp_info in sentence_temp_info_list:
-            link_length = sentence_temp_info.link_length
-            cooccurrence_words = sentence_temp_info.cooccurrence_words.split(WORD_SEPARATOR)
-            # phrases = sentence_temp_info.phrases.split(WORD_SEPARATOR)
-            counted_words = []
-            for word in cooccurrence_words:
-                val = co_occurrence_dict[attr][word]
-                counted_words.append('{}={}'.format(word, val))
-
-            score = link_length
-            counted_words = ', '.join(counted_words)
-            # print(attr)
-            # print(sentence_temp_info)
-
-            sentence_info = SentenceInfo(*sentence_temp_info, score, counted_words)
-            sentence_info_list.append(sentence_info)
-
-          scored_attr_map[attr][star_str] = sentence_info_list
-
-      else:
-        scored_attr_map[attr] = star_dict
-
+    Returns:
+      対応付けの結果
+    """
+    pred_data = AttrPredictionResult.load(pred_jsonpath)
+    attr_map = self._adapt_text_to_attr_and_star(pred_data)
     sorted_attr_map = OrderedDict()
-    result_dict = OrderedDict()
-    result_dict['product'] = pred_data['product']
-    result_dict['link']    = pred_data['link']
-    result_dict['maker']   = pred_data['maker']
-    result_dict['average_stars']     = pred_data['average_stars']
-    result_dict['star_distribution'] = pred_data['star_distribuition']
-    result_dict['total_review']   = pred_data['total_review']
-    result_dict['total_sentence'] = pred_data['total_sentence']
-    for attr, star_dict in scored_attr_map.items():
+    for attr, star_dict in attr_map.items():
       sorted_star_dict = OrderedDict()
-      for star_str, sentence_info_list in star_dict.items():
-        if attr in self.en2ja.keys():
-          sorted_sentence_info_list = sorted(sentence_info_list, key=lambda si: si.score, reverse=True)
-          sorted_star_dict[star_str] = [OrderedDict(si._asdict()) for si in sorted_sentence_info_list]
+      for star_str, info_for_mapping_list in star_dict.items():
+        if attr in self.en2ja:
+          sorted_sentence_info_list = sorted(
+              info_for_mapping_list, key=lambda si: si.score, reverse=True)
+          sorted_star_dict[star_str] = tuple(sorted_sentence_info_list)
 
         else:
-          sorted_star_dict[star_str] = [OrderedDict(si._asdict()) for si in sentence_info_list]
+          sorted_star_dict[star_str] = tuple(info_for_mapping_list)
       
       sorted_attr_map[attr] = sorted_star_dict
 
-    result_dict['map'] = sorted_attr_map
-    return result_dict
+    mapping_result = MappingResult(
+        pred_data.category, pred_data.product, pred_data.link, pred_data.maker,
+        pred_data.average_stars, pred_data.stars_distribution,
+        pred_data.total_review, pred_data.total_text, sorted_attr_map)
+    return mapping_result
 
+  def _adapt_text_to_attr_and_star(
+      self, pred_data: AttrPredictionResult
+  ) -> Dict[str, Dict[str, List[ReviewTextInfoForMapping]]]:
+    """レビュー文中の文を属性と星評価に対応付ける
 
-  def _read_prediction_json(self, pred_json) -> list:
-    pred_json = pathlib.Path(pred_json)
-    pred_data = json.load(pred_json.open(mode='r', encoding=self.code),
-                          object_pairs_hook=OrderedDict)
-    return pred_data
+    Args:
+      pred_data (AttrPredictionResult): 属性抽出予測結果
+
+    Returns:
+      レビュー文中の文を属性と星評価に対応付けた辞書
+    """
+    attr_to_star_map = OrderedDict()
+    for attr in self.en2ja:
+      attr_to_star_map[attr] = _initialize_star_map()
+
+    attr_to_star_map[OTHER_EN_ATTR] = _initialize_star_map()    
+    for review_text_info in pred_data.texts:
+      star = review_text_info.star
+      star_str = STAR_CORRESPONDENCE_DICT[star]
+      review = review_text_info.review
+      text = review_text_info.text
+      result_dict = review_text_info.result
+      if result_dict:
+        for attr, extraction_results in result_dict.items():                    
+          phrases = []
+          candidate_terms = []
+          hit_terms = []
+          for extraction_result in extraction_results:
+            phrases.extend(extraction_result.phrases)
+            candidate_terms.extend(extraction_result.candidate_terms)
+            hit_terms.extend(extraction_result.hit_terms)
+
+          phrases = frozenset(phrases)
+          link_length = len(phrases)
+          candidate_terms = frozenset(unique_sort_by_index(candidate_terms))
+          hit_terms = frozenset(unique_sort_by_index(hit_terms))
+          info_for_mapping = ReviewTextInfoForMapping(
+              review, text, candidate_terms, hit_terms, phrases,
+              len(extraction_results), link_length, link_length)
+          attr_to_star_map[attr][star_str].append(info_for_mapping)
+
+      else:  # 属性が抽出できなかった場合
+        info_for_mapping = ReviewTextInfoForMapping(review, text, '', '', '',
+                                                    0, 0, 0)
+        attr_to_star_map[OTHER_EN_ATTR][star_str].append(info_for_mapping)
+
+    return attr_to_star_map
   
-  def _make_star_dict(self) -> OrderedDict:
-    star_dict = OrderedDict()
-    for star_str in STAR_CORRESPONDENCE_DICT.values():
-      star_dict[star_str] = []
+def _initialize_star_map() -> Dict[str, List[()]]:
+  """星評価とレビュー文中の文を対応付けさせるための辞書を初期化して返す"""
+  star_to_texts = OrderedDict()
+  for star_str in STAR_CORRESPONDENCE_DICT.values():
+    star_to_texts[star_str] = list()
 
-    return star_dict
+  return star_to_texts
 
 
 if __name__ == "__main__":
@@ -207,41 +261,8 @@ if __name__ == "__main__":
 
   dic_dir = args.dic_dir
   mapper = SentenceMapper(dic_dir, category)
-
-  jsonpath_list = [pathlib.Path(f).resolve() for f in glob.glob('{}\\**'.format(input_dir), recursive=True)
-                   if pathlib.Path(f).suffix == '.json' and pathlib.Path(f).name.startswith('prediction')]
-  
+  jsonpath_list = get_all_jsonfiles(input_dir, 'prediction')
   for jsonpath in jsonpath_list:
+    map_result = mapper.create_map(jsonpath)
     out_file = jsonpath.parent / 'map_{}'.format(jsonpath.name)
-    product_name = jsonpath.parent.name
-
-    map_dict = mapper.create_map(jsonpath)
-
-    # pprint(map_dict)
-
-    # attrs = len(map_dict.keys())
-    # stars = len(SentenceMapper.STAR_CORRESPONDENCE_DICT.keys())
-    # heatmap = np.zeros((stars, attrs-1), dtype=int)
-    # for cidx, (attrs, star_dict) in enumerate(map_dict.items()):
-    #     if attrs == SentenceMapper.OTHER_EN_ATTR:
-    #         continue
-
-    #     for ridx, (star_str, sentence_info_list) in enumerate(star_dict.items()):
-    #         heatmap[ridx, cidx] = len(sentence_info_list)
-
-    # map_df = pandas.DataFrame(
-    #     heatmap, 
-    #     index=SentenceMapper.STAR_CORRESPONDENCE_DICT.values(),
-    #     columns=[*map_dict.keys()][:-1]
-    # )
-    
-    # plt.figure()
-    # plt.title('{}'.format(product_name))
-    # seaborn.heatmap(map_df, cmap='cool')
-    # f, _ = os.path.splitext(file_name)
-    # img_file = '{}\\heatmap_{}.png'.format(product_dir, f)
-    # plt.savefig(img_file)
-    
-
-    json.dump(map_dict, out_file.open(mode='w', encoding=mapper.code),
-              ensure_ascii=False, indent=4)
+    map_result.dump(out_file)
