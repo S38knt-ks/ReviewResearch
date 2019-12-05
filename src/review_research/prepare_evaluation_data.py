@@ -1,109 +1,81 @@
 import json
 import argparse
 import os
+import pathlib
 import glob
 from collections import OrderedDict, namedtuple
 
 from tqdm import tqdm
 
-from .nlp import AttrDictHandler
 from .nlp import Splitter
-
-PRODUCT_NAME = 'product'
-SENTENCES    = 'sentences'
-
-ATTRIBUTE_FIELD = ['name', 'flag']
-Attribute = namedtuple('Attribute', ATTRIBUTE_FIELD)
-
-SENTENCE_FIELD = ['review_id', 'last_review_id', 'review', 'sentence_id', 'last_sentence_id', 'sentence', 'attributes']
+from .nlp import COMMON_DICTIONARY_NAME
+from .nlp import AttrDictHandler
+from .review import ReviewPageJSON
+from .evaluation import AttrAnnotation
+from .evaluation import TextWithAttrAnnotation
+from .evaluation import AttrEvaluationData
 
 def set_classes(dic_dir: str, category: str):
-  common_dic_dir_name = AttrDictHandler.COMMON_DICTIONARY
-  common_dic_dir = '{}\\{}'.format(dic_dir, common_dic_dir_name)
-  common_dics = [dic for dic in glob.glob('{}\\*.txt'.format(common_dic_dir)) if os.path.isfile(dic)]
-
-  category_dic_dir = '{}\\{}'.format(dic_dir, category)
-  category_dics = [dic for dic in glob.glob('{}\\*.txt'.format(category_dic_dir)) if os.path.isfile(dic)]
-
+  dict_handler = AttrDictHandler(dic_dir)
   attr_dict = OrderedDict()
-  all_dics = common_dics + category_dics
-  for dic in all_dics:
-    attr_key, _ = os.path.splitext(os.path.basename(dic))
-    with open(dic, mode='r', encoding='utf-8') as fp:
-      attr_name = fp.readline().strip().replace('name:', '')
-
-    attr_dict[attr_key] = attr_name
+  common_attr_en_name = [*dict_handler.common_en2ja][0]
+  attr_dict[common_attr_en_name] = dict_handler.common_en2ja[common_attr_en_name]
+  for attr_en_name, attr_ja_name in dict_handler.en2ja(category).items():
+    attr_dict[attr_en_name] = attr_ja_name
 
   return attr_dict
 
-
 def main(args):
-  data_dir = args.data_dir
-  json_file_list = [
-      f for f in glob.glob('{}\\**'.format(os.path.abspath(data_dir)), recursive=True)
-      if os.path.isfile(f) and f.endswith('review.json')
-  ]
+  data_dir = pathlib.Path(args.data_dir)
+  all_paths = tuple(
+      pathlib.Path(f) 
+      for f in glob.glob('{}\\**'.format(data_dir), recursive=True)
+  )
+  json_filepaths = tuple(p for p in all_paths
+                         if p.is_file() and p.name == 'review.json')
 
   splitter = Splitter()
   dic_dir = args.dic_dir
-  for json_file in tqdm(json_file_list, ascii=True):
-    product_dir, _ = os.path.split(json_file)
-    category_dir, _ = os.path.split(product_dir)
-    category = os.path.basename(category_dir)
+  for json_file in tqdm(json_filepaths, ascii=True):
+    product_dir = json_file.parent
+    product_name = product_dir.name
+    category = product_dir.parent.name
 
     attribute_dict = set_classes(dic_dir, category)
-    attribute_list = [*attribute_dict.keys()]
+    attribute_list = [*attribute_dict]
     Attributes = namedtuple('Attributes', attribute_list)
-    attribute_pairs = [Attribute(name, 0) for name in attribute_dict.values()]
-    attributes = Attributes(
-        *[attr._asdict() for attr in attribute_pairs]
-    )
+    attribute_pairs = [AttrAnnotation(name, 0) 
+                       for name in attribute_dict.values()]
+    attributes = Attributes(*[attr._asdict() for attr in attribute_pairs])
 
-    Sentence = namedtuple('Sentence', SENTENCE_FIELD)
-
-    evaluation_data = OrderedDict()
-
-    product_name = os.path.basename(product_dir)
-    evaluation_data[PRODUCT_NAME] = product_name
-
-    review_data = json.load(open(json_file, mode='r', encoding='utf-8'), object_pairs_hook=OrderedDict)
-    reviews = review_data['reviews']
-    total_review = len(reviews)
-
-    all_sentence_list = []
-    for idx, review_info in enumerate(reviews):
+    review_data = ReviewPageJSON.load(json_file)
+    total_review = review_data.total_reviews
+    all_text_list = []
+    for idx, review_info in enumerate(review_data.reviews):
       review_id = idx
-      review = review_info['review']
+      review = review_info.review
 
-      sentences = splitter.split_sentence(review)
-      last_sentence_id = len(sentences)
+      texts = splitter.split_sentence(review)
+      last_text_id = len(texts)
       sentence_list = [
-          Sentence(review_id + 1, total_review, review, sentence_id + 1, last_sentence_id, sentence, attributes)
-          for sentence_id, sentence in sentences.items()
+          TextWithAttrAnnotation(
+              review_id + 1, total_review, review, sentence_id + 1, 
+              last_text_id, sentence, attributes)
+          for sentence_id, sentence in texts.items()
       ]
-      all_sentence_list.extend(sentence_list)
+      all_text_list.extend(sentence_list)
   
+    total_text = len(all_text_list)
+    evaluation_data = AttrEvaluationData(category, product_name, total_review, total_text, all_text_list)
 
-    total_sentence = len(all_sentence_list)
-    evaluation_data['total_review']   = total_review
-    evaluation_data['total_sentence'] = total_sentence
-    evaluation_data[SENTENCES] = [OrderedDict(s._asdict()) for s in all_sentence_list]
-
-    out_file = '{}\\eval.json'.format(product_dir)
-    json.dump(evaluation_data,
-              open(out_file, mode='w', encoding='utf-8'),
-              ensure_ascii=False, indent=4)
-
+    out_file = product_dir / 'eval.json'
+    evaluation_data.dump(out_file)
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-
-  parser.add_argument(
-      'data_dir'
-  )
-
-  parser.add_argument(
-      'dic_dir'
-  )
+  parser.add_argument('dic_dir',
+                      help='属性辞書を格納しているフォルダパス')
+  parser.add_argument('data_dir', 
+                      help='review.json を格納しているフォルダパス')
 
   main(parser.parse_args())
